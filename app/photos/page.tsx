@@ -1,7 +1,14 @@
 // app/photos/page.tsx
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   AnimatePresence,
   motion,
@@ -70,6 +77,26 @@ const BLUR_DATA_URL =
 // sizes that naturally flex with a sidebar-controlled layout (no 100vw assumptions)
 const FLEX_SIZES =
   "(min-width: 1024px) calc(100vw - var(--sidebar-width, 0px)), 100vw";
+
+// ---------- small helpers (new) ----------
+
+function isHoldText(v: string | null | undefined) {
+  const s = (v ?? "").trim().toLowerCase();
+  return s.length === 0 || s === "hold";
+}
+
+function getPhotoIndex0(photoId: string) {
+  // photoId is "image_123"
+  const parts = photoId.split("_");
+  const n = Number(parts[1]);
+  return Number.isFinite(n) ? Math.max(0, n - 1) : 0;
+}
+
+function isValidLatLng(lat: number, lng: number) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return false;
+  return true;
+}
 
 // ---------- overrides (unchanged) ----------
 
@@ -1063,18 +1090,26 @@ const layoutClasses: Record<LayoutVariant, string> = {
   window: "col-span-12",
 };
 
-// indices that become window rows
+// indices that become window rows (0-based)
 const windowIndices = new Set<number>([5, 18, 31, 44, 57, 70, 83, 96, 109, 122]);
 
-function computeLayoutVariant(photo: PhotoMeta, index: number): LayoutVariant {
+function computeLayoutVariant(photo: PhotoMeta, index0: number): LayoutVariant {
   if (photo.layoutVariant) return photo.layoutVariant;
-  if (windowIndices.has(index)) return "window";
-  return index % 3 === 0 ? "full" : "half";
+  if (windowIndices.has(index0)) return "window";
+  return index0 % 3 === 0 ? "full" : "half";
 }
 
 // ---------- WINDOW (scroll-tied parallax + freeze + pill timing) ----------
 
-function WindowFrame({ photo, index }: { photo: PhotoMeta; index: number }) {
+function WindowFrame({
+  photo,
+  index0,
+  onImageError,
+}: {
+  photo: PhotoMeta;
+  index0: number;
+  onImageError: (id: string) => void;
+}) {
   const sectionRef = useRef<HTMLDivElement | null>(null);
 
   const { scrollYProgress } = useScroll({
@@ -1111,7 +1146,8 @@ function WindowFrame({ photo, index }: { photo: PhotoMeta; index: number }) {
   );
   const pillY = useTransform(scrollYProgress, [0.22, 0.28, 0.60, 0.68], [10, 0, 0, 10]);
 
-  const isPriority = index < 14 || windowIndices.has(index);
+  const isPriority = index0 < 14 || windowIndices.has(index0);
+  const showLocation = !isHoldText(photo.locationLabel);
 
   return (
     <div className="col-span-12" id={`photo-${photo.id}`}>
@@ -1137,18 +1173,21 @@ function WindowFrame({ photo, index }: { photo: PhotoMeta; index: number }) {
                 sizes={FLEX_SIZES}
                 quality={80}
                 className="object-cover"
+                onError={() => onImageError(photo.id)}
               />
             </motion.div>
           </motion.div>
 
-          <motion.div
-            style={{ opacity: pillOpacity, y: pillY }}
-            className="pointer-events-none absolute right-4 sm:right-6 bottom-4 sm:bottom-6"
-          >
-            <div className="rounded-full bg-black/70 px-4 py-1.5 text-sm font-medium text-white/90 shadow-sm backdrop-blur-md">
-              <span className="line-clamp-1">{photo.locationLabel}</span>
-            </div>
-          </motion.div>
+          {showLocation && (
+            <motion.div
+              style={{ opacity: pillOpacity, y: pillY }}
+              className="pointer-events-none absolute right-4 sm:right-6 bottom-4 sm:bottom-6"
+            >
+              <div className="rounded-full bg-black/70 px-4 py-1.5 text-sm font-medium text-white/90 shadow-sm backdrop-blur-md">
+                <span className="line-clamp-1">{photo.locationLabel}</span>
+              </div>
+            </motion.div>
+          )}
         </div>
       </div>
     </div>
@@ -1157,9 +1196,18 @@ function WindowFrame({ photo, index }: { photo: PhotoMeta; index: number }) {
 
 // ---------- GRID CARD (faster perceived load + more elegant appear) ----------
 
-function GridPhotoCard({ photo, index }: { photo: PhotoMeta; index: number }) {
-  const gridClass = layoutClasses[computeLayoutVariant(photo, index)];
-  const isPriority = index < 14 || windowIndices.has(index);
+function GridPhotoCard({
+  photo,
+  index0,
+  onImageError,
+}: {
+  photo: PhotoMeta;
+  index0: number;
+  onImageError: (id: string) => void;
+}) {
+  const gridClass = layoutClasses[computeLayoutVariant(photo, index0)];
+  const isPriority = index0 < 14 || windowIndices.has(index0);
+  const showLocation = !isHoldText(photo.locationLabel);
 
   return (
     <motion.div
@@ -1179,119 +1227,336 @@ function GridPhotoCard({ photo, index }: { photo: PhotoMeta; index: number }) {
             placeholder="blur"
             blurDataURL={BLUR_DATA_URL}
             fill
-            sizes={computeLayoutVariant(photo, index) === "full" ? FLEX_SIZES : "(min-width:1024px) 50vw, 100vw"}
+            sizes={
+              computeLayoutVariant(photo, index0) === "full"
+                ? FLEX_SIZES
+                : "(min-width:1024px) 50vw, 100vw"
+            }
             quality={80}
             className="h-full w-full object-cover"
+            onError={() => onImageError(photo.id)}
           />
-          <div className="pointer-events-none absolute inset-x-3 bottom-3 flex justify-end">
-            <div className="rounded-full bg-black/70 px-4 py-1.5 text-sm font-medium text-white/90 shadow-sm backdrop-blur-md">
-              <span className="line-clamp-1">{photo.locationLabel}</span>
+          {showLocation && (
+            <div className="pointer-events-none absolute inset-x-3 bottom-3 flex justify-end">
+              <div className="rounded-full bg-black/70 px-4 py-1.5 text-sm font-medium text-white/90 shadow-sm backdrop-blur-md">
+                <span className="line-clamp-1">{photo.locationLabel}</span>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </motion.div>
   );
 }
 
-// ---------- MAP panel (inside the bubble) ----------
+// ---------- MAP panel (persistent + preloaded; fills pane) ----------
 
 type MapPanelProps = {
   photos: PhotoMeta[];
-  active: boolean;
+  visible: boolean;
   onSelectPhoto: (id: string) => void;
 };
 
-function MapPanel({ photos, active, onSelectPhoto }: MapPanelProps) {
-  const mapContainer = useRef<HTMLDivElement | null>(null);
+function MapPanel({ photos, visible, onSelectPhoto }: MapPanelProps) {
+  const visibleHostRef = useRef<HTMLDivElement | null>(null);
+  const preloadHostRef = useRef<HTMLDivElement | null>(null);
+
+  // We keep a single container element for Mapbox and move it between:
+  // - offscreen preload host (always mounted)
+  // - visible host (inside the expanded pane)
+  const mapRootElRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
+  const mapboxRef = useRef<any>(null);
+  const markersRef = useRef<any[]>([]);
+
+  const [mounted, setMounted] = useState(false);
   const [ready, setReady] = useState(false);
-  const [hasGeotags, setHasGeotags] = useState(false);
+  const [tokenMissing, setTokenMissing] = useState(false);
 
+  useEffect(() => setMounted(true), []);
+
+  const geotagged = useMemo(() => {
+    return photos.filter((p) => {
+      // allow (0,0) only if it doesn't look like placeholder data
+      if (!isValidLatLng(p.latitude, p.longitude)) return false;
+      if (p.latitude === 0 && p.longitude === 0 && isHoldText(p.locationLabel)) return false;
+      return true;
+    });
+  }, [photos]);
+
+  const hasGeotags = geotagged.length > 0;
+
+  const nudgeResize = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const kick = () => {
+      try {
+        map.resize();
+      } catch {
+        // ignore
+      }
+    };
+
+    // double-rAF ensures layout/paint has settled (helps with Framer layout transitions)
+    requestAnimationFrame(() => requestAnimationFrame(kick));
+    setTimeout(kick, 90);
+    setTimeout(kick, 220);
+    setTimeout(kick, 420);
+  }, []);
+
+  // Create the map container element once.
   useEffect(() => {
-    if (!active) return;
+    if (!mounted) return;
+    if (mapRootElRef.current) return;
+    const el = document.createElement("div");
+    el.style.position = "absolute";
+    el.style.inset = "0";
+    el.style.width = "100%";
+    el.style.height = "100%";
+    mapRootElRef.current = el;
+  }, [mounted]);
 
-    const geotagged = photos.filter((p) => p.latitude || p.longitude);
-    setHasGeotags(geotagged.length > 0);
-    if (!mapContainer.current || geotagged.length === 0) return;
-
+  // Preload mapbox-gl ASAP (no dependency additions).
+  useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      const mod = await import("mapbox-gl");
-      const mapboxgl = mod.default || (mod as any);
-      const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-      if (!token) {
-        console.warn("NEXT_PUBLIC_MAPBOX_TOKEN missing");
-        return;
+      try {
+        const mod = await import("mapbox-gl");
+        if (cancelled) return;
+
+        const mapboxgl = (mod as any).default || (mod as any);
+        mapboxRef.current = mapboxgl;
+
+        const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+        if (!token) {
+          setTokenMissing(true);
+          return;
+        }
+        mapboxgl.accessToken = token;
+        setTokenMissing(false);
+      } catch (e) {
+        console.warn("mapbox-gl failed to load", e);
       }
-      mapboxgl.accessToken = token;
-
-      const avgLat =
-        geotagged.reduce((s, p) => s + p.latitude, 0) / geotagged.length;
-      const avgLng =
-        geotagged.reduce((s, p) => s + p.longitude, 0) / geotagged.length;
-
-      if (cancelled) return;
-
-      mapRef.current = new mapboxgl.Map({
-        container: mapContainer.current!,
-        style: "mapbox://styles/mapbox/dark-v11",
-        center: [avgLng || 0, avgLat || 0],
-        zoom: geotagged.length > 1 ? 2.4 : 4,
-      });
-
-      mapRef.current.addControl(
-        new mapboxgl.NavigationControl({ showZoom: true }),
-        "top-right",
-      );
-
-      mapRef.current.on("load", () => {
-        setReady(true);
-        const kick = () => mapRef.current && mapRef.current.resize();
-        requestAnimationFrame(() => requestAnimationFrame(kick));
-        setTimeout(kick, 150);
-        setTimeout(kick, 350);
-      });
-
-      geotagged.forEach((photo) => {
-        const el = document.createElement("div");
-        el.className =
-          "h-3 w-3 rounded-full bg-white shadow ring-2 ring-black/60 cursor-pointer";
-        el.addEventListener("click", () => onSelectPhoto(photo.id));
-        new mapboxgl.Marker({ element: el })
-          .setLngLat([photo.longitude, photo.latitude])
-          .addTo(mapRef.current);
-      });
     })();
 
     return () => {
       cancelled = true;
-      if (mapRef.current) mapRef.current.remove();
+    };
+  }, []);
+
+  // Move the map container between preload + visible hosts (keeps map warm/instant).
+  useLayoutEffect(() => {
+    if (!mounted) return;
+    const root = mapRootElRef.current;
+    if (!root) return;
+
+    const target = visible ? visibleHostRef.current : preloadHostRef.current;
+    if (!target) return;
+
+    if (root.parentElement !== target) {
+      target.appendChild(root);
+    }
+
+    // Resize after move.
+    nudgeResize();
+  }, [mounted, visible, nudgeResize]);
+
+  // Create the map once, as soon as mapbox module + host exist.
+  useEffect(() => {
+    if (!mounted) return;
+    if (tokenMissing) return;
+    if (mapRef.current) return;
+
+    const mapboxgl = mapboxRef.current;
+    const root = mapRootElRef.current;
+    const preloadHost = preloadHostRef.current;
+
+    if (!mapboxgl || !root || !preloadHost) return;
+
+    // Ensure the root is in the DOM before map construction.
+    if (root.parentElement !== preloadHost) {
+      preloadHost.appendChild(root);
+    }
+
+    // Initial view: if we have tags use their average, else a neutral world view.
+    const avgLat =
+      geotagged.length > 0
+        ? geotagged.reduce((s, p) => s + p.latitude, 0) / geotagged.length
+        : 20;
+    const avgLng =
+      geotagged.length > 0
+        ? geotagged.reduce((s, p) => s + p.longitude, 0) / geotagged.length
+        : 0;
+
+    const map = new mapboxgl.Map({
+      container: root,
+      style: "mapbox://styles/mapbox/dark-v11",
+      center: [avgLng || 0, avgLat || 20],
+      zoom: geotagged.length > 1 ? 2.4 : geotagged.length === 1 ? 4 : 1.2,
+    });
+
+    mapRef.current = map;
+
+    map.addControl(new mapboxgl.NavigationControl({ showZoom: true }), "top-right");
+
+    map.on("load", () => {
+      setReady(true);
+      nudgeResize();
+    });
+
+    // Keep map sized correctly through viewport changes.
+    const onWinResize = () => nudgeResize();
+    window.addEventListener("resize", onWinResize);
+    window.addEventListener("orientationchange", onWinResize);
+
+    return () => {
+      window.removeEventListener("resize", onWinResize);
+      window.removeEventListener("orientationchange", onWinResize);
+      try {
+        map.remove();
+      } catch {
+        // ignore
+      }
       mapRef.current = null;
+      markersRef.current = [];
       setReady(false);
     };
-  }, [active, photos, onSelectPhoto]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, tokenMissing, nudgeResize]);
+
+  // Observe host size changes (Framer layout animation) and resize the map.
+  useEffect(() => {
+    if (!mounted) return;
+    const map = mapRef.current;
+    if (!map) return;
+
+    const target = visible ? visibleHostRef.current : preloadHostRef.current;
+    if (!target) return;
+
+    if (typeof ResizeObserver === "undefined") return;
+
+    const ro = new ResizeObserver(() => {
+      try {
+        map.resize();
+      } catch {
+        // ignore
+      }
+    });
+
+    ro.observe(target);
+    return () => ro.disconnect();
+  }, [mounted, visible]);
+
+  // Update markers + camera when the filtered photo set changes.
+  useEffect(() => {
+    const map = mapRef.current;
+    const mapboxgl = mapboxRef.current;
+    if (!map || !mapboxgl) return;
+
+    // Clear old markers
+    markersRef.current.forEach((m) => {
+      try {
+        m.remove();
+      } catch {
+        // ignore
+      }
+    });
+    markersRef.current = [];
+
+    // Add markers for currently visible (filtered) set
+    geotagged.forEach((photo) => {
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className =
+        "h-3.5 w-3.5 rounded-full bg-white ring-2 ring-black/70 shadow-[0_2px_10px_rgba(0,0,0,0.65)] cursor-pointer";
+      el.setAttribute("aria-label", `jump to ${photo.id}`);
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        onSelectPhoto(photo.id);
+      });
+
+      const marker = new mapboxgl.Marker({ element: el })
+        .setLngLat([photo.longitude, photo.latitude])
+        .addTo(map);
+
+      markersRef.current.push(marker);
+    });
+
+    // Update camera
+    const animate = visible;
+    const duration = animate ? 520 : 0;
+
+    if (geotagged.length === 0) {
+      map.easeTo({ center: [0, 20], zoom: 1.2, duration });
+      nudgeResize();
+      return;
+    }
+
+    if (geotagged.length === 1) {
+      map.easeTo({
+        center: [geotagged[0].longitude, geotagged[0].latitude],
+        zoom: 4,
+        duration,
+      });
+      nudgeResize();
+      return;
+    }
+
+    const bounds = new mapboxgl.LngLatBounds();
+    geotagged.forEach((p) => bounds.extend([p.longitude, p.latitude]));
+    map.fitBounds(bounds, {
+      padding: 70,
+      maxZoom: 4.6,
+      duration,
+    });
+
+    nudgeResize();
+  }, [geotagged, visible, onSelectPhoto, nudgeResize]);
+
+  if (!mounted) return null;
 
   return (
-    <div className="relative h-[22rem] w-full overflow-hidden rounded-2xl bg-neutral-900/90">
-      {hasGeotags ? (
-        <>
-          <div ref={mapContainer} className="absolute inset-0" />
-          {!ready && (
-            <div className="absolute inset-0 animate-pulse bg-gradient-to-b from-neutral-900 via-neutral-800/80 to-neutral-900" />
-          )}
-        </>
-      ) : (
-        <div className="flex h-full w-full items-center justify-center px-6 text-center text-sm text-neutral-200">
-          add latitude / longitude to your photos to see them plotted here.
-        </div>
+    <>
+      {/* Offscreen preload host (keeps the map warm so opening feels instant). */}
+      {createPortal(
+        <div
+          ref={preloadHostRef}
+          aria-hidden="true"
+          className="fixed -left-[9999px] -top-[9999px] h-[22rem] w-[min(780px,96vw)] overflow-hidden opacity-0 pointer-events-none"
+        />,
+        document.body,
       )}
-    </div>
+
+      <div className="absolute inset-0">
+        <div ref={visibleHostRef} className="absolute inset-0" />
+
+        {/* Loading shimmer (only until style has loaded) */}
+        {!ready && !tokenMissing && (
+          <div className="absolute inset-0 animate-pulse bg-gradient-to-b from-neutral-900 via-neutral-800/80 to-neutral-900" />
+        )}
+
+        {/* Token missing */}
+        {tokenMissing && (
+          <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-neutral-200">
+            NEXT_PUBLIC_MAPBOX_TOKEN missing.
+          </div>
+        )}
+
+        {/* No tags (still show map if it exists, but message explains markers) */}
+        {!tokenMissing && !hasGeotags && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-neutral-200/90">
+            add latitude / longitude to your photos to see them plotted here.
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
-// ---------- FILTERS panel (inside the bubble) ----------
+// ---------- FILTERS panel (fills pane) ----------
 
 type FilterState = {
   regions: Set<Region>;
@@ -1316,7 +1581,7 @@ function FiltersPanel({ state, onChange, onReset }: FiltersPanelProps) {
     "rounded-full px-4 py-1.5 text-[0.95rem] transition focus-visible:outline-none";
 
   return (
-    <div className="flex w-full flex-col gap-4 rounded-2xl bg-neutral-900/95 p-5">
+    <div className="flex h-full w-full flex-col gap-4 overflow-y-auto p-5">
       <div className="space-y-2">
         <p className="text-xs uppercase tracking-[0.18em] text-neutral-300/90">
           Location
@@ -1413,7 +1678,7 @@ function FiltersPanel({ state, onChange, onReset }: FiltersPanelProps) {
         </div>
       </div>
 
-      <div className="mt-1 flex justify-end">
+      <div className="mt-1 flex justify-end pb-1">
         <button
           type="button"
           onClick={onReset}
@@ -1447,6 +1712,9 @@ function FloatingControls({
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<BubbleMode>(null);
 
+  const pressTimerRef = useRef<number | null>(null);
+  const longPressFiredRef = useRef(false);
+
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
@@ -1470,7 +1738,14 @@ function FloatingControls({
     filterState.settings.size +
     filterState.subjects.size;
 
-  const handleToggle = (next: BubbleMode) => {
+  const openMode = (next: BubbleMode) => {
+    if (!next) return;
+    setOpen(true);
+    setMode(next);
+  };
+
+  const toggleMode = (next: BubbleMode) => {
+    if (!next) return;
     if (open && mode === next) {
       setOpen(false);
       setMode(null);
@@ -1480,88 +1755,176 @@ function FloatingControls({
     }
   };
 
+  const startPress = (next: BubbleMode) => {
+    if (!next) return;
+    longPressFiredRef.current = false;
+
+    if (pressTimerRef.current) {
+      window.clearTimeout(pressTimerRef.current);
+      pressTimerRef.current = null;
+    }
+
+    // iOS-like long-press: open slightly after touch-down
+    pressTimerRef.current = window.setTimeout(() => {
+      longPressFiredRef.current = true;
+      openMode(next);
+    }, 120);
+  };
+
+  const endPress = (next: BubbleMode) => {
+    if (!next) return;
+
+    if (pressTimerRef.current) {
+      window.clearTimeout(pressTimerRef.current);
+      pressTimerRef.current = null;
+    }
+
+    // If long-press already opened, do not toggle on release.
+    if (!longPressFiredRef.current) {
+      toggleMode(next);
+    }
+  };
+
+  const cancelPress = () => {
+    if (pressTimerRef.current) {
+      window.clearTimeout(pressTimerRef.current);
+      pressTimerRef.current = null;
+    }
+    longPressFiredRef.current = false;
+  };
+
   if (!mounted) return null;
 
   return createPortal(
     <>
-      {open && (
-        <button
-          type="button"
-          aria-label="close overlay"
-          onClick={() => {
-            setOpen(false);
-            setMode(null);
-          }}
-          className="fixed inset-0 z-[90] bg-black/30"
-        />
-      )}
+      <AnimatePresence>
+        {open && (
+          <motion.button
+            type="button"
+            aria-label="close overlay"
+            onClick={() => {
+              setOpen(false);
+              setMode(null);
+            }}
+            className="fixed inset-0 z-[90] bg-black/30"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18, ease: [0.22, 0.61, 0.36, 1] }}
+          />
+        )}
+      </AnimatePresence>
 
       <div className="fixed bottom-5 right-3 z-[100] md:bottom-7 md:right-6">
         <motion.div
           layout
           initial={false}
           transition={{
-            layout: { duration: 0.35, ease: [0.22, 0.61, 0.36, 1] },
+            // iOS-ish springy expansion
+            layout: { type: "spring", stiffness: 520, damping: 42, mass: 0.9 },
           }}
           style={{ originX: 1, originY: 1 }}
-          className={`pointer-events-auto bg-neutral-900/70 shadow-lg backdrop-blur-2xl ${
-            open ? "p-3 rounded-3xl w-[min(780px,96vw)]" : "px-1.5 py-1 rounded-full"
-          }`}
+          className={[
+            "relative pointer-events-auto backdrop-blur-2xl",
+            "bg-neutral-900/70 ring-1 ring-white/10",
+            "shadow-[0_14px_55px_rgba(0,0,0,0.62)]",
+            open ? "p-2 rounded-[28px] w-[min(780px,96vw)]" : "p-1 rounded-full",
+          ].join(" ")}
         >
-          <AnimatePresence mode="wait">
-            {open && mode && (
+          {/* Content pane (fixed height; fills; no reserved gaps) */}
+          <motion.div
+            initial={false}
+            animate={{
+              height: open && mode ? "22rem" : "0rem",
+              opacity: open && mode ? 1 : 0,
+            }}
+            transition={{ type: "spring", stiffness: 520, damping: 44, mass: 0.9 }}
+            style={{ willChange: "height, opacity" }}
+            className="relative w-full overflow-hidden"
+          >
+            <div className="relative h-[22rem] w-full overflow-hidden rounded-2xl bg-neutral-900/95">
+              {/* Map layer (kept mounted + preloaded; shown/hidden via opacity) */}
               <motion.div
-                key={mode}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 8 }}
-                transition={{ duration: 0.25, ease: [0.22, 0.61, 0.36, 1] }}
-                className="mb-3 pr-14 pb-14"
+                initial={false}
+                animate={{
+                  opacity: open && mode === "map" ? 1 : 0,
+                  scale: open && mode === "map" ? 1 : 0.985,
+                }}
+                transition={{ duration: 0.22, ease: [0.22, 0.61, 0.36, 1] }}
+                className="absolute inset-0"
+                style={{
+                  pointerEvents: open && mode === "map" ? "auto" : "none",
+                }}
               >
-                {mode === "map" ? (
-                  <MapPanel
-                    photos={photos}
-                    active={mode === "map" && open}
-                    onSelectPhoto={onSelectPhoto}
-                  />
-                ) : (
-                  <FiltersPanel
-                    state={filterState}
-                    onChange={onFilterChange}
-                    onReset={resetFilters}
-                  />
-                )}
+                <MapPanel photos={photos} visible={open && mode === "map"} onSelectPhoto={onSelectPhoto} />
               </motion.div>
-            )}
-          </AnimatePresence>
 
-          <div className="pointer-events-auto absolute bottom-2 right-2 flex items-center gap-2">
+              {/* Filters layer */}
+              <motion.div
+                initial={false}
+                animate={{
+                  opacity: open && mode === "filters" ? 1 : 0,
+                  scale: open && mode === "filters" ? 1 : 0.985,
+                }}
+                transition={{ duration: 0.22, ease: [0.22, 0.61, 0.36, 1] }}
+                className="absolute inset-0"
+                style={{
+                  pointerEvents: open && mode === "filters" ? "auto" : "none",
+                }}
+              >
+                <FiltersPanel
+                  state={filterState}
+                  onChange={onFilterChange}
+                  onReset={resetFilters}
+                />
+              </motion.div>
+            </div>
+          </motion.div>
+
+          {/* Icon dock (anchored; subtle black shadow) */}
+          <div
+            className={[
+              "pointer-events-auto absolute bottom-2 right-2 flex items-center gap-2",
+              "rounded-full bg-black/35 px-1.5 py-1 ring-1 ring-white/10 backdrop-blur-md",
+              "shadow-[0_10px_28px_rgba(0,0,0,0.70)]",
+            ].join(" ")}
+          >
             <button
               type="button"
-              onClick={() => handleToggle("map")}
               aria-label="map"
-              className={
-                "inline-flex h-9 w-9 items-center justify-center rounded-full text-neutral-200 transition focus-visible:outline-none " +
-                (mode === "map" && open
-                  ? "bg-white/15 text-white"
-                  : "hover:bg-white/10")
-              }
+              onPointerDown={() => startPress("map")}
+              onPointerUp={() => endPress("map")}
+              onPointerCancel={cancelPress}
+              onPointerLeave={cancelPress}
+              className={[
+                "inline-flex h-9 w-9 items-center justify-center rounded-full",
+                "text-neutral-200 transition focus-visible:outline-none",
+                "active:scale-[0.96]",
+                mode === "map" && open ? "bg-white/15 text-white" : "hover:bg-white/10",
+              ].join(" ")}
             >
-              <MapIcon className="h-4 w-4" />
+              <MapIcon className="h-4 w-4 drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]" />
             </button>
+
             <div className="h-5 w-px bg-white/25" />
+
             <button
               type="button"
-              onClick={() => handleToggle("filters")}
               aria-label="filters"
-              className={
-                "inline-flex h-9 w-9 items-center justify-center rounded-full text-neutral-200 transition focus-visible:outline-none " +
-                ((mode === "filters" && open) || activeFiltersCount > 0
+              onPointerDown={() => startPress("filters")}
+              onPointerUp={() => endPress("filters")}
+              onPointerCancel={cancelPress}
+              onPointerLeave={cancelPress}
+              className={[
+                "inline-flex h-9 w-9 items-center justify-center rounded-full",
+                "text-neutral-200 transition focus-visible:outline-none",
+                "active:scale-[0.96]",
+                (mode === "filters" && open) || activeFiltersCount > 0
                   ? "bg-white/15 text-white"
-                  : "hover:bg-white/10")
-              }
+                  : "hover:bg-white/10",
+              ].join(" ")}
             >
-              <SlidersHorizontal className="h-3.5 w-3.5" />
+              <SlidersHorizontal className="h-3.5 w-3.5 drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]" />
             </button>
           </div>
         </motion.div>
@@ -1580,24 +1943,37 @@ export default function PhotosPage() {
     subjects: new Set(),
   });
 
-  const filteredPhotos = useMemo(() => {
-    return photos.filter((p) => {
-      const regionOk =
-        filterState.regions.size === 0 || filterState.regions.has(p.region);
-      const settingOk =
-        filterState.settings.size === 0 ||
-        filterState.settings.has(p.setting);
+  // Track images that fail to load (removes blank HOLD blocks caused by mismatches).
+  const [brokenPhotoIds, setBrokenPhotoIds] = useState<Set<string>>(() => new Set());
 
-      const subjects = Array.isArray(p.subject) ? p.subject : [p.subject];
-      const subjectOk =
-        filterState.subjects.size === 0 ||
-        subjects.some((s) => filterState.subjects.has(s));
-
-      return regionOk && settingOk && subjectOk;
+  const reportBroken = useCallback((id: string) => {
+    setBrokenPhotoIds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
     });
-  }, [filterState]);
+  }, []);
 
-  const handleSelectPhoto = (id: string) => {
+  const filteredPhotos = useMemo(() => {
+    return photos
+      .filter((p) => !brokenPhotoIds.has(p.id))
+      .filter((p) => {
+        const regionOk =
+          filterState.regions.size === 0 || filterState.regions.has(p.region);
+        const settingOk =
+          filterState.settings.size === 0 || filterState.settings.has(p.setting);
+
+        const subjects = Array.isArray(p.subject) ? p.subject : [p.subject];
+        const subjectOk =
+          filterState.subjects.size === 0 ||
+          subjects.some((s) => filterState.subjects.has(s));
+
+        return regionOk && settingOk && subjectOk;
+      });
+  }, [filterState, brokenPhotoIds]);
+
+  const handleSelectPhoto = useCallback((id: string) => {
     const el = document.getElementById(`photo-${id}`);
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -1606,7 +1982,7 @@ export default function PhotosPage() {
       top: window.scrollY + rect.top - offset,
       behavior: "smooth",
     });
-  };
+  }, []);
 
   return (
     <>
@@ -1615,12 +1991,24 @@ export default function PhotosPage() {
         <div className="px-4 sm:px-6 pt-[112px] md:pt-[112px] pb-10">
           <div className="relative overflow-visible">
             <div className="grid grid-cols-12 gap-6 md:gap-10">
-              {filteredPhotos.map((photo, index) => {
-                const variant = computeLayoutVariant(photo, index);
+              {filteredPhotos.map((photo) => {
+                const index0 = getPhotoIndex0(photo.id);
+                const variant = computeLayoutVariant(photo, index0);
+
                 return variant === "window" ? (
-                  <WindowFrame key={photo.id} photo={photo} index={index} />
+                  <WindowFrame
+                    key={photo.id}
+                    photo={photo}
+                    index0={index0}
+                    onImageError={reportBroken}
+                  />
                 ) : (
-                  <GridPhotoCard key={photo.id} photo={photo} index={index} />
+                  <GridPhotoCard
+                    key={photo.id}
+                    photo={photo}
+                    index0={index0}
+                    onImageError={reportBroken}
+                  />
                 );
               })}
             </div>
@@ -1637,3 +2025,4 @@ export default function PhotosPage() {
     </>
   );
 }
+
