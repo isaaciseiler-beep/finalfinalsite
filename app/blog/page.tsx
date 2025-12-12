@@ -3,11 +3,22 @@ import fs from "node:fs";
 import path from "node:path";
 import matter from "gray-matter";
 import Link from "next/link";
-import Image from "next/image";
 import MainContainer from "@/components/MainContainer";
 import Reveal from "@/components/Reveal";
 
-type PostMeta = { title: string; date: string; image?: string; summary?: string; tags?: string[] };
+type PostMeta = {
+  title: string;
+  date: string;
+  image?: string;
+  summary?: string;
+  tags?: string[];
+};
+
+type PostListItem = {
+  slug: string;
+  meta: PostMeta;
+  excerpt: string;
+};
 
 const BLOG_DIR = path.join(process.cwd(), "content", "blog");
 
@@ -18,18 +29,82 @@ function sanitizeForMatter(src: string) {
   return lines.join("\n");
 }
 
-function getPosts() {
+function formatDate(date: string) {
+  const d = new Date(date);
+  if (Number.isNaN(Number(d))) return date;
+  return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+}
+
+function createExcerpt(src: string, maxLen = 220) {
+  let text = src || "";
+
+  // Drop leading MDX imports/exports (common in MDX files)
+  text = text
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*(import|export)\s+/.test(line))
+    .join("\n");
+
+  // Remove fenced code blocks
+  text = text.replace(/```[\s\S]*?```/g, " ");
+
+  // Remove HTML/JSX tags
+  text = text.replace(/<\/?[^>]+>/g, " ");
+
+  // Images: ![alt](url)
+  text = text.replace(/!\[[^\]]*]\([^)]*\)/g, " ");
+
+  // Links: [text](url) -> text
+  text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+
+  // Inline code
+  text = text.replace(/`[^`]*`/g, " ");
+
+  // Headings / blockquotes / list markers
+  text = text.replace(/^#{1,6}\s+/gm, "");
+  text = text.replace(/^\s*>\s+/gm, "");
+  text = text.replace(/^\s*[-*+]\s+/gm, "");
+  text = text.replace(/^\s*\d+\.\s+/gm, "");
+
+  // Emphasis / misc markdown tokens
+  text = text.replace(/[*_~]/g, " ");
+
+  // Collapse whitespace
+  text = text.replace(/\s+/g, " ").trim();
+
+  if (!text) return "";
+
+  if (text.length <= maxLen) return text;
+
+  // Prefer cutting on a sentence boundary when possible
+  const slice = text.slice(0, maxLen + 1);
+  const lastPeriod = Math.max(slice.lastIndexOf(". "), slice.lastIndexOf("! "), slice.lastIndexOf("? "));
+  if (lastPeriod > Math.floor(maxLen * 0.6)) {
+    return slice.slice(0, lastPeriod + 1).trim();
+  }
+
+  // Otherwise cut on a word boundary
+  const lastSpace = slice.lastIndexOf(" ");
+  return (lastSpace > 0 ? slice.slice(0, lastSpace) : slice.slice(0, maxLen)).trim() + "…";
+}
+
+function getPosts(): PostListItem[] {
   if (!fs.existsSync(BLOG_DIR)) return [];
+
   const files = fs.readdirSync(BLOG_DIR).filter((f) => f.endsWith(".mdx"));
+
   return files
     .map((file) => {
       const slug = file.replace(/\.mdx$/, "");
       const raw = fs.readFileSync(path.join(BLOG_DIR, file), "utf8");
-      const { data } = matter(sanitizeForMatter(raw));
-      return { slug, meta: data as Partial<PostMeta> };
+      const { data, content } = matter(sanitizeForMatter(raw));
+
+      const meta = data as Partial<PostMeta>;
+      const excerpt = (meta.summary?.trim() || createExcerpt(content)).trim();
+
+      return { slug, meta, excerpt };
     })
-    .filter((p) => p.meta?.title && p.meta?.date)
-    .sort((a, b) => Number(new Date(b.meta!.date!)) - Number(new Date(a.meta!.date!)));
+    .filter((p): p is { slug: string; meta: PostMeta; excerpt: string } => Boolean(p.meta?.title && p.meta?.date))
+    .sort((a, b) => Number(new Date(b.meta.date)) - Number(new Date(a.meta.date)));
 }
 
 export default function BlogIndexPage() {
@@ -37,75 +112,47 @@ export default function BlogIndexPage() {
 
   return (
     <MainContainer>
-      <Reveal>
-        <h1 className="text-[32px] font-medium leading-none text-white tracking-tight">Blog Posts</h1>
-      </Reveal>
+      <div className="mx-auto w-full max-w-[720px]">
+        <Reveal>
+          <h1 className="text-[34px] font-semibold leading-[1.05] text-white tracking-tight">Blog</h1>
+        </Reveal>
 
-      {/* full-width rectangle cards */}
-      <div className="mt-6 grid grid-cols-1 gap-4">
-        {posts.length === 0 ? (
-          <div className="text-sm text-neutral-400">
-            no posts found in <code className="text-neutral-300">/content/blog</code>.
-          </div>
-        ) : (
-          posts.map(({ slug, meta }, i) => {
-            const dateStr = meta?.date
-              ? new Date(meta.date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "2-digit" })
-              : "";
+        <div className="mt-3 text-[15px] leading-relaxed text-neutral-300">
+          Writing about building, shipping, and learning in public.
+        </div>
 
-            return (
-              <Reveal key={slug} delayMs={60 * i}>
+        <div className="mt-8 border-t border-neutral-800">
+          {posts.length === 0 ? (
+            <div className="pt-6 text-sm text-neutral-400">
+              no posts found in <code className="text-neutral-300">/content/blog</code>.
+            </div>
+          ) : (
+            posts.map(({ slug, meta, excerpt }, i) => (
+              <Reveal key={slug} delayMs={50 * i}>
                 <Link
                   href={`/blog/${slug}`}
-                  className="group block overflow-hidden border border-neutral-800 no-underline hover:border-neutral-700"
+                  className={[
+                    "group block border-b border-neutral-800 py-6 no-underline",
+                    "-mx-2 px-2 rounded-md",
+                    "transition-colors hover:bg-neutral-900/30",
+                  ].join(" ")}
                 >
-                  {/* 16:9 rectangle that runs to the container edges */}
-                  <div className="relative aspect-video w-full">
-                    {meta?.image ? (
-                      <Image
-                        src={meta.image}
-                        alt=""
-                        fill
-                        className="object-cover"
-                        sizes="(min-width:1024px) 896px, (min-width:640px) 80vw, 100vw"
-                        priority={i === 0}
-                      />
-                    ) : (
-                      <div className="absolute inset-0 bg-neutral-900" />
-                    )}
+                  <div className="text-[13px] font-medium text-neutral-400">{formatDate(meta.date)}</div>
 
-                    {/* bottom gradient 30% */}
-                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[30%] bg-gradient-to-t from-black/90 to-transparent" />
-
-                    {/* info pack bottom 25% */}
-                    <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5">
-                      <div className="min-h-[25%]">
-                        <div className="text-[13px] text-neutral-300">{dateStr}</div>
-                        <div className="mt-0.5 line-clamp-2 text-[20px] font-medium text-white">{meta?.title}</div>
-                        {meta?.summary ? (
-                          <div className="mt-0.5 line-clamp-2 text-[15px] text-neutral-300">{meta.summary}</div>
-                        ) : null}
-                        {meta?.tags?.length ? (
-                          <div className="mt-1.5 flex flex-wrap gap-1">
-                            {meta.tags.slice(0, 6).map((t) => (
-                              <span
-                                key={t}
-                                className="rounded-md border border-neutral-700/70 bg-black/30 px-1.5 py-0.5 text-[12px] text-neutral-300"
-                              >
-                                {t}
-                              </span>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
+                  <div className="mt-2 text-[22px] sm:text-[26px] font-semibold leading-snug tracking-tight text-white group-hover:text-white">
+                    {meta.title}
                   </div>
+
+                  {excerpt ? (
+                    <p className="mt-2 line-clamp-2 text-[15px] leading-relaxed text-neutral-300">{excerpt}</p>
+                  ) : null}
                 </Link>
               </Reveal>
-            );
-          })
-        )}
+            ))
+          )}
+        </div>
       </div>
     </MainContainer>
   );
 }
+
