@@ -1,0 +1,62 @@
+---
+title: "Job Signal"
+summary: "A daily job-market signal that turns noisy listings into a ranked, actionable feed."
+date: "2025-05-21"
+status: "shipped"
+tags: ["search", "ranking", "automation", "product"]
+emoji: "📡"
+---
+
+## What it is
+
+Most job boards are optimized for volume, not clarity. **Job Signal** is a small system that ingests listings from multiple sources, normalizes them, deduplicates aggressively, and produces a daily “what’s actually worth reading” feed.
+
+The goal is not to replace job boards. The goal is to make a high-signal shortlist that you can review in minutes.
+
+## Problem
+
+When you’re actively looking, you spend time on the wrong work:
+
+- Re-reading the same role reposted across multiple boards
+- Clicking listings that don’t match your constraints (level, location, stack, scope)
+- Losing context on what you already applied to (and why you skipped something)
+- Missing great roles because they’re buried under “freshness” spam
+
+The result is a loop of **low-quality scanning** and **high context switching**.
+
+## Constraints I designed around
+
+- **Static-friendly**: should run as a simple pipeline, producing output that can be hosted anywhere
+- **Explainable ranking**: every “why this is high” should be legible, not magic
+- **Deduplication-first**: duplicates are the main trust killer for a curated feed
+- **Low maintenance**: sources change; the system shouldn’t require daily babysitting
+
+## Approach
+
+The pipeline is intentionally boring:
+
+1. **Ingest**: pull from a small list of sources (RSS, exports, bookmarked searches)
+2. **Normalize**: convert each item into a single canonical schema (title, org, location, compensation text, raw description)
+3. **Deduplicate**: collapse reposts using a multi-key strategy:
+   - strong keys (canonical URL, job id)
+   - weak keys (title similarity + org + location)
+4. **Enrich**: extract structured hints from description text:
+   - seniority cues (staff/principal vs. junior)
+   - stack mentions (runtime, infra, data)
+   - work mode cues (remote, hybrid, on-site)
+5. **Score**: rank using a weighted, explainable model
+6. **Publish**: emit a daily “feed” with a stable permalink per role
+
+### Scoring model (intentionally simple)
+
+The ranking is a weighted sum. Nothing fancy—just enough to surface relevance and reduce regret.
+
+```txt
+score =
+  + role_match
+  + domain_match
+  + recency
+  + compensation_hint
+  - spam_signals
+  - relocation_mismatch
+  - keyword_blacklist
