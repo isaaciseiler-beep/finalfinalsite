@@ -23,6 +23,10 @@ function makeCardKey(item: ExperienceWithYear, index: number) {
   return `${item.year}-${item.org}-${item.role}-${index}`;
 }
 
+function clamp(n: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, n));
+}
+
 export default function ExperienceDeck({
   mode = "cards",
   fanOutKey, // kept for api compatibility
@@ -38,12 +42,29 @@ export default function ExperienceDeck({
   const items = useMemo(buildItems, []);
   const [idx, setIdx] = useState(0);
 
+  // Used only to compute timeline spacing without relying on layout animations.
+  // Starts at md height to match SSR/hydration, then corrects after mount.
+  const [cardH, setCardH] = useState(420);
+
   const cur = items[idx];
 
   useEffect(() => {
     if (!cur || !onActiveYearChange) return;
     onActiveYearChange(cur.year);
   }, [cur, onActiveYearChange]);
+
+  useEffect(() => {
+    // keep idx safe (defensive; items are memoized but avoids edge cases)
+    if (!items.length) return;
+    setIdx((i) => clamp(i, 0, items.length - 1));
+  }, [items.length]);
+
+  useEffect(() => {
+    const update = () => setCardH(window.innerWidth >= 768 ? 420 : 380);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
 
   if (!items.length || !cur) {
     return (
@@ -58,13 +79,27 @@ export default function ExperienceDeck({
   const hasNext = idx < items.length - 1;
 
   const motionTransition = reduce
-    ? { duration: 0.3 }
-    : { duration: 0.7, ease: [0.3, 0, 0.2, 1] as any };
+    ? { duration: 0.25 }
+    : { duration: 0.55, ease: [0.3, 0, 0.2, 1] as any };
+
+  // Deck feel: fixed card dimensions; animate transform (x/y) + opacity only.
+  const stackY = [0, 32, 64];
+  const stackOpacity = [1, 0.72, 0.44];
+  const exitX = 180;
+
+  // Timeline fan-out: cards spread vertically (still fixed height).
+  const timelineGap = 18;
+  const timelineSlot = cardH + timelineGap;
+  const timelineHeight = Math.max(
+    cardH,
+    items.length * timelineSlot - timelineGap,
+  );
 
   return (
     <section
       className="relative isolate px-0 pb-8 pt-2 md:pb-10 md:pt-2"
       aria-label="experience cards"
+      data-fan-out-key={fanOutKey}
     >
       {/* nav row — top, arrows left, progress right, only in cards mode */}
       {isCards && (
@@ -88,98 +123,70 @@ export default function ExperienceDeck({
       )}
 
       <div
-        className={
-          isCards
-            ? "relative w-full pt-2 pb-2 min-h-[380px] md:min-h-[420px]"
-            : "relative w-full space-y-3 pt-2 pb-2"
-        }
+        className={[
+          "relative w-full",
+          isCards ? "min-h-[380px] md:min-h-[420px]" : "",
+        ].join(" ")}
+        // In timeline mode, cards are absolutely positioned; set an explicit height.
+        style={isCards ? undefined : { height: timelineHeight }}
       >
         {items.map((item, index) => {
           const key = makeCardKey(item, index);
-          const isActive = index === idx;
+
           const offset = index - idx;
+          const isActive = offset === 0;
 
-          // stacked deck: show only current + next two
-          if (isCards) {
-            if (offset < 0) return null;
-            if (offset > 2) return null;
-          }
+          // Target transform/opacity only (no scale, no layout, no padding/bg animations).
+          let x = 0;
+          let y = 0;
+          let opacity = 1;
 
-          // STEP 1: fan-out positions (no scale → text never stretched)
-          let animateProps: { x: number; y: number };
           if (isCards) {
             if (offset === 0) {
-              animateProps = { x: 0, y: 0 };
+              x = 0;
+              y = stackY[0];
+              opacity = stackOpacity[0];
             } else if (offset === 1) {
-              animateProps = { x: 0, y: 32 };
+              x = 0;
+              y = stackY[1];
+              opacity = stackOpacity[1];
+            } else if (offset === 2) {
+              x = 0;
+              y = stackY[2];
+              opacity = stackOpacity[2];
+            } else if (offset < 0) {
+              // past cards: park off to the left, fully transparent
+              x = -exitX;
+              y = 0;
+              opacity = 0;
             } else {
-              animateProps = { x: 0, y: 64 };
+              // far-future cards: park off to the right, fully transparent
+              x = exitX;
+              y = stackY[2];
+              opacity = 0;
             }
           } else {
-            // timeline layout target
-            animateProps = { x: 0, y: 0 };
+            x = 0;
+            y = index * timelineSlot;
+            opacity = 1;
           }
 
-          // STEP 2 + 3: staged styling for bg + lines + internal gap
-          const topBg = "rgb(15,15,15)"; // neutral-900
-          const ghostBg = "rgb(7,7,7)"; // darker
-          const transparentBg = "rgba(0,0,0,0)";
-          const dividerColor = "rgba(38,38,38,1)"; // neutral-800
-          const dividerTransparent = "rgba(38,38,38,0)";
-
-          const backgroundColor = isCards
+          const zIndex = isCards
             ? offset === 0
-              ? topBg
-              : ghostBg
-            : transparentBg;
-
-          const borderColor = isCards ? dividerTransparent : dividerColor;
-
-          // gap between text + buttons shrinks in timeline mode
-          const paddingBlock = isCards ? 28 : 16; // vertical padding px
-          const paddingInline = isCards ? 28 : 16; // horizontal padding px
-
-          const outerBaseCards =
-            "overflow-hidden rounded-2xl h-[380px] md:h-[420px] w-full focus:outline-none focus-visible:outline-none";
-          const outerBaseTimeline =
-            "w-full focus:outline-none focus-visible:outline-none";
-
-          const outerClass = isCards ? outerBaseCards : outerBaseTimeline;
-
-          const positioningClass = isCards
-            ? "absolute inset-x-0 top-0"
-            : "relative";
-
-          const pointerClass =
-            isCards && !isActive ? "pointer-events-none" : "";
-
-          const style: React.CSSProperties = {
-            backgroundColor,
-            borderColor,
-            padding: `${paddingBlock}px ${paddingInline}px`,
-            transition:
-              // 1) padding (gap) change while cards fan/stack
-              "padding 0.55s cubic-bezier(0.3,0,0.2,1)," +
-              // 2) card background fades
-              "background-color 0.55s cubic-bezier(0.3,0,0.2,1) 0.18s," +
-              // 3) lines fade in/out
-              "border-color 0.45s cubic-bezier(0.3,0,0.2,1) 0.35s",
-            ...(isCards ? { zIndex: 10 - offset } : {}),
-          };
-
-          const titleClass = isCards
-            ? "mt-3 text-xl font-semibold tracking-tight md:text-2xl"
-            : "mt-1.5 text-lg font-semibold tracking-tight md:text-xl";
-
-          const summaryMargin = isCards ? "mt-4" : "mt-2";
-          const buttonMargin = isCards ? "mt-6" : "mt-2";
+              ? 30
+              : offset === 1
+                ? 20
+                : offset === 2
+                  ? 10
+                  : 0
+            : 1;
 
           return (
             <motion.article
               key={key}
-              // no layout / layoutId / scale → text never gets squashed
+              // No layout/layoutId; no scale. Only transform + opacity.
               initial={false}
-              animate={animateProps}
+              animate={{ x, y, opacity }}
               transition={motionTransition}
               drag={isCards && isActive ? ("x" as const) : false}
               dragConstraints={{ left: 0, right: 0 }}
@@ -192,31 +199,37 @@ export default function ExperienceDeck({
                   setIdx((i) => i - 1);
                 }
               }}
-              onClick={() => setIdx(index)}
+              onClick={() => {
+                if (!isCards) setIdx(index);
+              }}
+              aria-hidden={isCards && !isActive}
               className={[
-                outerClass,
-                positioningClass,
-                pointerClass,
-                !isCards ? "border-b last:border-b-0" : "border-b",
+                "absolute inset-x-0 top-0 w-full",
+                "overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900",
+                "h-[380px] md:h-[420px]",
+                "focus:outline-none focus-visible:outline-none",
+                isCards && !isActive ? "pointer-events-none" : "",
+                isCards && isActive ? "cursor-grab active:cursor-grabbing" : "",
               ].join(" ")}
-              style={style}
+              style={{ zIndex, willChange: "transform" }}
             >
-              <div className="flex h-full flex-col justify-between text-left">
+              <div className="flex h-full flex-col justify-between px-7 py-7 text-left md:px-7 md:py-7">
                 <div>
                   <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted">
                     {item.dates}
                   </p>
-                  <h3 className={titleClass}>{item.role}</h3>
+                  <h3 className="mt-3 text-xl font-semibold tracking-tight md:text-2xl">
+                    {item.role}
+                  </h3>
                   <p className="mt-1 text-sm text-muted">{item.org}</p>
-                  <p
-                    className={`${summaryMargin} text-sm leading-relaxed text-muted`}
-                  >
+                  <p className="mt-4 text-sm leading-relaxed text-muted">
                     {item.summary}
                   </p>
                 </div>
 
-                {item.link && (
-                  <div className={buttonMargin}>
+                {/* In cards mode, only the active card exposes interactive content. */}
+                {item.link && (!isCards || isActive) && (
+                  <div className="mt-6">
                     <Link
                       href={item.link}
                       target="_blank"
