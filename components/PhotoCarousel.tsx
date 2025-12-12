@@ -112,7 +112,11 @@ export default function PhotoCarousel() {
               return (
                 <motion.div
                   key={photo.id}
-                  className="absolute aspect-square w-[44%] sm:w-[40%] md:w-[38%] lg:w-[36%] overflow-hidden border border-white/10 shadow-[0_18px_40px_rgba(0,0,0,0.9)]"
+                  className={[
+                    "absolute aspect-square w-[44%] sm:w-[40%] md:w-[38%] lg:w-[36%]",
+                    "overflow-hidden rounded-3xl", // rounded corners
+                    "shadow-[0_22px_55px_rgba(0,0,0,0.72)]", // no border; softer/lusher
+                  ].join(" ")}
                   style={{
                     top: `${preset.top}%`,
                     left: `${preset.left}%`,
@@ -152,23 +156,35 @@ export default function PhotoCarousel() {
             }
             transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
           >
-            <motion.span
-              className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-normal tracking-tight text-white"
-              style={{
-                textShadow:
-                  "0 0 22px rgba(0,0,0,0.98), 0 5px 16px rgba(0,0,0,1)",
-                opacity: 1,
-              }}
-              initial={{ clipPath: "inset(0 100% 0 0)" }}
-              animate={
-                hovered
-                  ? { clipPath: "inset(0 0 0 0)" }
-                  : { clipPath: "inset(0 100% 0 0)" }
-              }
-              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            >
-              Check out my photos
-            </motion.span>
+            {/* soft vignette behind text to avoid "square gradient" look */}
+            <div className="relative">
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute left-1/2 top-1/2 h-[11.5rem] w-[34rem] -translate-x-1/2 -translate-y-1/2 rounded-full"
+                style={{
+                  background:
+                    "radial-gradient(closest-side, rgba(0,0,0,0.78), rgba(0,0,0,0.0))",
+                  filter: "blur(10px)",
+                }}
+              />
+              <motion.span
+                className="relative text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-normal tracking-tight text-white"
+                style={{
+                  // softer + less defined than before
+                  textShadow:
+                    "0 10px 40px rgba(0,0,0,0.75), 0 2px 16px rgba(0,0,0,0.65)",
+                }}
+                initial={{ clipPath: "inset(0 100% 0 0)" }}
+                animate={
+                  hovered
+                    ? { clipPath: "inset(0 0 0 0)" }
+                    : { clipPath: "inset(0 100% 0 0)" }
+                }
+                transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+              >
+                Check out my photos
+              </motion.span>
+            </div>
           </motion.div>
         </div>
       </div>
