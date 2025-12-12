@@ -9,7 +9,13 @@ import ContentFrame from "@/components/ContentFrame";
 export default function Page() {
   return (
     <main className="pb-20 space-y-16 md:space-y-24">
-      <ParallaxHero lines={["simple.", "black and white.", "frictionless."]} />
+      <ParallaxHero
+        lines={[
+          "Working at the intersection of",
+          "AI, emerging tech,",
+          "and society.",
+        ]}
+      />
 
       <ContentFrame>
         <section className="min-w-0">
@@ -28,3 +34,4 @@ export default function Page() {
     </main>
   );
 }
+
