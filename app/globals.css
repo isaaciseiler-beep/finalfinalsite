@@ -1,0 +1,25 @@
+@import url('https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; }
+
+html, body { @apply bg-bg text-fg antialiased font-sans; }
+
+* { scrollbar-width: thin; scrollbar-color: #333 #111; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #111; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 8px; }
+
+:focus-visible { outline: none; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #000; }
+a { @apply underline-offset-4 hover:underline; }
+
+.card { @apply rounded-2xl border border-border bg-black/40 shadow-subtle; }
+.hr { @apply border-t border-border; }
+
+/* type rhythm using Switzer */
+h1 { @apply tracking-tight text-[clamp(28px,6vw,48px)] font-semibold leading-[1.02]; }
+h2 { @apply tracking-tight text-[clamp(20px,3.5vw,28px)] font-medium; }
+p, li { @apply tracking-tight; }

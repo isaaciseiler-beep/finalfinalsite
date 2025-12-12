@@ -1,0 +1,134 @@
+// components/PhotoCarousel.tsx — DROP-IN REPLACEMENT
+"use client";
+
+import { motion } from "framer-motion";
+import Image from "next/image";
+import { useState } from "react";
+
+const PHOTOS = [
+  { src: "/images/featured/photos.jpg", alt: "portfolio" },
+  { src: "/images/strip/iceland.jpg", alt: "iceland 1" },
+  { src: "/images/strip/taipei.jpg", alt: "taipei 1" },
+  { src: "/images/strip/newzealand.jpg", alt: "new zealand 1" },
+  { src: "/images/strip/kyrgyzstan.jpg", alt: "kyrgyzstan 1" },
+  { src: "/images/strip/iceland.jpg", alt: "iceland 2" },
+  { src: "/images/strip/taipei.jpg", alt: "taipei 2" },
+  { src: "/images/strip/newzealand.jpg", alt: "new zealand 2" },
+  { src: "/images/strip/kyrgyzstan.jpg", alt: "kyrgyzstan 2" },
+];
+
+// base layout positions (% inside inner square) to make a loose circle
+const BASE_LAYOUT = [
+  { top: 32, left: 32, rotate: -4, z: 50 }, // center
+  { top: 14, left: 20, rotate: -18, z: 42 },
+  { top: 14, left: 46, rotate: 17, z: 40 },
+  { top: 30, left: 8, rotate: -11, z: 38 },
+  { top: 50, left: 52, rotate: 12, z: 36 },
+  { top: 58, left: 22, rotate: 8, z: 34 },
+  { top: 58, left: 46, rotate: -7, z: 32 },
+  { top: 40, left: 58, rotate: 7, z: 30 },
+  { top: 10, left: 32, rotate: 10, z: 28 },
+];
+
+export default function PhotoCarousel() {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <section
+      className="h-full w-full"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <div className="relative flex h-full w-full items-center justify-center bg-black">
+        {/* inner square with buffer to pane edges */}
+        <div className="relative aspect-square w-[88%] max-h-[88%] max-w-[88%]">
+          {/* stacked photos */}
+          <div className="relative h-full w-full">
+            {PHOTOS.map((photo, i) => {
+              const preset = BASE_LAYOUT[i % BASE_LAYOUT.length];
+
+              const base = {
+                x: 0,
+                y: 0,
+                rotate: preset.rotate,
+              };
+
+              // replace ONLY the transition + jitter block inside the map()
+
+              const jitter = hovered
+                ? {
+                    x: (i % 2 === 0 ? 1 : -1) * 10,      // was 14 → tighter
+                    y: (i % 3 === 0 ? -1 : 1) * 9,       // was 12 → tighter
+                    rotate:
+                      preset.rotate +
+                      (i === 0 ? 5 : i % 2 === 0 ? 7 : -6), // slightly reduced
+                  }
+                : base;
+              
+              return (
+                <motion.div
+                  key={photo.src + i}
+                  className="absolute aspect-square w-[44%] sm:w-[40%] md:w-[38%] lg:w-[36%] overflow-hidden border border-white/10 shadow-[0_18px_40px_rgba(0,0,0,0.9)]"
+                  style={{
+                    top: `${preset.top}%`,
+                    left: `${preset.left}%`,
+                    zIndex: preset.z,
+                  }}
+                  initial={base}
+                  animate={jitter}
+                  transition={{
+                    type: "spring",
+                    stiffness: 90,   // was 70 → responsive and precise
+                    damping: 27,     // was 23 → cleaner stop
+                    mass: 0.85,      // was 1.05 → shorter, snappier
+                  }}
+                >
+
+                  <Image
+                    src={photo.src}
+                    alt={photo.alt}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 55vw, (max-width: 1200px) 35vw, 28vw"
+                    priority={i === 0}
+                  />
+                </motion.div>
+              );
+            })}
+          </div>
+
+          {/* hover text overlay – forced above photos */}
+          <motion.div
+            className="pointer-events-none absolute inset-0 flex items-center justify-center"
+            style={{ zIndex: 999 }}
+            initial={{ opacity: 0, x: -24, filter: "blur(10px)" }}
+            animate={
+              hovered
+                ? { opacity: 1, x: 0, filter: "blur(0px)" }
+                : { opacity: 0, x: -24, filter: "blur(10px)" }
+            }
+            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <motion.span
+              className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-normal tracking-tight text-white"
+              style={{
+                textShadow:
+                  "0 0 22px rgba(0,0,0,0.98), 0 5px 16px rgba(0,0,0,1)",
+                opacity: 1,
+              }}
+              initial={{ clipPath: "inset(0 100% 0 0)" }}
+              animate={
+                hovered
+                  ? { clipPath: "inset(0 0 0 0)" }
+                  : { clipPath: "inset(0 100% 0 0)" }
+              }
+              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            >
+              Check out my photos
+            </motion.span>
+          </motion.div>
+        </div>
+      </div>
+    </section>
+  );
+}
