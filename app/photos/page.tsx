@@ -1691,7 +1691,7 @@ function FiltersPanel({ state, onChange, onReset }: FiltersPanelProps) {
   );
 }
 
-// ---------- LIQUID-GLASS PILL (single anchor that expands/retracts) ----------
+// ---------- LIQUID-GLASS PILL (fixed dock + anchored popup) ----------
 
 type BubbleMode = "map" | "filters" | null;
 
@@ -1738,6 +1738,8 @@ function FloatingControls({
     filterState.settings.size +
     filterState.subjects.size;
 
+  const panelOpen = open && mode !== null;
+
   const openMode = (next: BubbleMode) => {
     if (!next) return;
     setOpen(true);
@@ -1764,7 +1766,7 @@ function FloatingControls({
       pressTimerRef.current = null;
     }
 
-    // iOS-like long-press: open slightly after touch-down
+    // iOS-like long-press
     pressTimerRef.current = window.setTimeout(() => {
       longPressFiredRef.current = true;
       openMode(next);
@@ -1797,6 +1799,7 @@ function FloatingControls({
 
   return createPortal(
     <>
+      {/* click-off overlay */}
       <AnimatePresence>
         {open && (
           <motion.button
@@ -1806,7 +1809,7 @@ function FloatingControls({
               setOpen(false);
               setMode(null);
             }}
-            className="fixed inset-0 z-[90] bg-black/30"
+            className="fixed inset-0 z-[190] bg-black/30"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -1815,35 +1818,39 @@ function FloatingControls({
         )}
       </AnimatePresence>
 
-      <div className="fixed bottom-5 right-3 z-[100] md:bottom-7 md:right-6">
-        <motion.div
-          layout
-          initial={false}
-          transition={{
-            // iOS-ish springy expansion
-            layout: { type: "spring", stiffness: 520, damping: 42, mass: 0.9 },
-          }}
-          style={{ originX: 1, originY: 1 }}
-          className={[
-            "relative pointer-events-auto backdrop-blur-2xl",
-            "bg-neutral-900/70 ring-1 ring-white/10",
-            "shadow-[0_14px_55px_rgba(0,0,0,0.62)]",
-            open ? "p-2 rounded-[28px] w-[min(780px,96vw)]" : "p-1 rounded-full",
-          ].join(" ")}
-        >
-          {/* Content pane (fixed height; fills; no reserved gaps) */}
+      {/* fixed anchor (pill never changes size/position) */}
+      <div className="fixed bottom-5 right-3 z-[200] md:bottom-7 md:right-6">
+        <div className="relative">
+          {/* POPUP PANEL (anchored above the pill; kept mounted so the map stays warm) */}
           <motion.div
-            initial={false}
-            animate={{
-              height: open && mode ? "22rem" : "0rem",
-              opacity: open && mode ? 1 : 0,
+            className="absolute right-0 bottom-[3.25rem] z-[10] w-[min(780px,96vw)]"
+            initial="closed"
+            animate={panelOpen ? "open" : "closed"}
+            variants={{
+              open: {
+                opacity: 1,
+                y: 0,
+                scale: 1,
+                visibility: "visible",
+                transition: { duration: 0.22, ease: [0.22, 0.61, 0.36, 1] },
+              },
+              closed: {
+                opacity: 0,
+                y: 10,
+                scale: 0.985,
+                transition: { duration: 0.18, ease: [0.22, 0.61, 0.36, 1] },
+                transitionEnd: { visibility: "hidden" },
+              },
             }}
-            transition={{ type: "spring", stiffness: 520, damping: 44, mass: 0.9 }}
-            style={{ willChange: "height, opacity" }}
-            className="relative w-full overflow-hidden"
+            style={{
+              pointerEvents: panelOpen ? "auto" : "none",
+              transformOrigin: "100% 100%",
+            }}
+            aria-hidden={!panelOpen}
           >
-            <div className="relative h-[22rem] w-full overflow-hidden rounded-2xl bg-neutral-900/95">
-              {/* Map layer (kept mounted + preloaded; shown/hidden via opacity) */}
+            {/* glass container (NO white ring/border) */}
+            <div className="relative h-[22rem] w-full overflow-hidden rounded-2xl bg-neutral-900/70 backdrop-blur-2xl shadow-[0_14px_55px_rgba(0,0,0,0.62)]">
+              {/* Map layer */}
               <motion.div
                 initial={false}
                 animate={{
@@ -1856,10 +1863,14 @@ function FloatingControls({
                   pointerEvents: open && mode === "map" ? "auto" : "none",
                 }}
               >
-                <MapPanel photos={photos} visible={open && mode === "map"} onSelectPhoto={onSelectPhoto} />
+                <MapPanel
+                  photos={photos}
+                  visible={open && mode === "map"}
+                  onSelectPhoto={onSelectPhoto}
+                />
               </motion.div>
 
-              {/* Filters layer */}
+              {/* Filters layer (inherits the same glass; no solid panel bg) */}
               <motion.div
                 initial={false}
                 animate={{
@@ -1881,14 +1892,17 @@ function FloatingControls({
             </div>
           </motion.div>
 
-          {/* Icon dock (anchored; subtle black shadow) */}
-          <div
-            className={[
-              "pointer-events-auto absolute bottom-2 right-2 flex items-center gap-2",
-              "rounded-full bg-black/35 px-1.5 py-1 ring-1 ring-white/10 backdrop-blur-md",
-              "shadow-[0_10px_28px_rgba(0,0,0,0.70)]",
-            ].join(" ")}
-          >
+          {/* ICON PILL (always fixed; background fades when popup opens) */}
+          <div className="relative z-[20] flex items-center gap-2 rounded-full px-1.5 py-1">
+            {/* background layer that fades out on open */}
+            <motion.div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 rounded-full bg-black/35 backdrop-blur-md shadow-[0_10px_28px_rgba(0,0,0,0.70)]"
+              initial={false}
+              animate={{ opacity: open ? 0 : 1 }}
+              transition={{ duration: 0.18, ease: [0.22, 0.61, 0.36, 1] }}
+            />
+
             <button
               type="button"
               aria-label="map"
@@ -1897,10 +1911,18 @@ function FloatingControls({
               onPointerCancel={cancelPress}
               onPointerLeave={cancelPress}
               className={[
-                "inline-flex h-9 w-9 items-center justify-center rounded-full",
-                "text-neutral-200 transition focus-visible:outline-none",
-                "active:scale-[0.96]",
-                mode === "map" && open ? "bg-white/15 text-white" : "hover:bg-white/10",
+                "relative inline-flex h-9 w-9 items-center justify-center rounded-full",
+                "transition focus-visible:outline-none active:scale-[0.96]",
+                // per-icon shadow when open (so icons remain legible over content)
+                open ? "shadow-[0_10px_28px_rgba(0,0,0,0.70)]" : "",
+                // no pill border/ring; active state uses color only when open
+                open
+                  ? mode === "map"
+                    ? "text-white"
+                    : "text-neutral-200 hover:text-white"
+                  : mode === "map" && open
+                    ? "text-white"
+                    : "text-neutral-200 hover:bg-white/10",
               ].join(" ")}
             >
               <MapIcon className="h-4 w-4 drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]" />
@@ -1916,18 +1938,22 @@ function FloatingControls({
               onPointerCancel={cancelPress}
               onPointerLeave={cancelPress}
               className={[
-                "inline-flex h-9 w-9 items-center justify-center rounded-full",
-                "text-neutral-200 transition focus-visible:outline-none",
-                "active:scale-[0.96]",
-                (mode === "filters" && open) || activeFiltersCount > 0
-                  ? "bg-white/15 text-white"
-                  : "hover:bg-white/10",
+                "relative inline-flex h-9 w-9 items-center justify-center rounded-full",
+                "transition focus-visible:outline-none active:scale-[0.96]",
+                open ? "shadow-[0_10px_28px_rgba(0,0,0,0.70)]" : "",
+                open
+                  ? mode === "filters" || activeFiltersCount > 0
+                    ? "text-white"
+                    : "text-neutral-200 hover:text-white"
+                  : (mode === "filters" && open) || activeFiltersCount > 0
+                    ? "bg-white/15 text-white"
+                    : "text-neutral-200 hover:bg-white/10",
               ].join(" ")}
             >
               <SlidersHorizontal className="h-3.5 w-3.5 drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]" />
             </button>
           </div>
-        </motion.div>
+        </div>
       </div>
     </>,
     document.body,
