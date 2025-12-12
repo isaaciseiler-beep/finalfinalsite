@@ -80,20 +80,20 @@ export default function NowStatus() {
               </p>
             </div>
 
-            {/* contact (underline ONLY on text span) */}
+            {/* contact (underline ONLY on text span; no double underline; arrow is ↗ only) */}
             <Link
               href="/contact"
               aria-label="Go to contact page"
-              className="group inline-flex items-center gap-1 text-base font-medium text-neutral-50 no-underline"
+              className="group inline-flex items-center gap-1 text-base font-medium text-neutral-50 no-underline hover:no-underline"
             >
-              <span className="relative pb-0.5 no-underline bg-gradient-to-r from-current to-current bg-[length:0%_1px] bg-left-bottom bg-no-repeat transition-[background-size] duration-300 group-hover:bg-[length:100%_1px]">
+              <span className="relative pb-0.5 bg-gradient-to-r from-current to-current bg-[length:0%_1px] bg-left-bottom bg-no-repeat transition-[background-size] duration-300 group-hover:bg-[length:100%_1px]">
                 Contact
               </span>
               <span
                 aria-hidden
                 className="text-sm no-underline transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
               >
-                →
+                ↗
               </span>
             </Link>
           </div>
