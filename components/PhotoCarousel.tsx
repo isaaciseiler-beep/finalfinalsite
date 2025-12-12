@@ -11,42 +11,8 @@ const R2_BASE_URL =
 
 const PHOTO_COUNT = 139;
 
-// session-level cache (persists across re-renders + remounts within the same tab/session)
-let cachedPhotos:
-  | Array<{
-      id: string;
-      src: string;
-      alt: string;
-    }>
-  | null = null;
-
-function pickUniqueNumbers(count: number, min: number, max: number) {
-  const total = max - min + 1;
-  const arr = Array.from({ length: total }, (_, i) => min + i);
-
-  // partial fisher-yates shuffle for first `count` picks
-  for (let i = 0; i < count; i++) {
-    const j = i + Math.floor(Math.random() * (total - i));
-    const tmp = arr[i];
-    arr[i] = arr[j];
-    arr[j] = tmp;
-  }
-
-  return arr.slice(0, count);
-}
-
-function makeSessionPhotos() {
-  const nums = pickUniqueNumbers(9, 1, PHOTO_COUNT);
-  return nums.map((n) => {
-    const id = `image_${n}`;
-    return {
-      id,
-      // IMPORTANT: match app/photos/page.tsx casing: .JPG
-      src: `${R2_BASE_URL}/image_${n}.JPG`,
-      alt: id,
-    };
-  });
-}
+// bump this string to force a new 9-photo set
+const SESSION_KEY = "photoCarouselSelection_v4";
 
 // base layout positions (% inside inner square) to make a loose circle
 const BASE_LAYOUT = [
@@ -61,14 +27,61 @@ const BASE_LAYOUT = [
   { top: 10, left: 32, rotate: 10, z: 28 },
 ];
 
+function pickUniqueNumbers(count: number, min: number, max: number) {
+  const total = max - min + 1;
+  const arr = Array.from({ length: total }, (_, i) => min + i);
+
+  for (let i = 0; i < count; i++) {
+    const j = i + Math.floor(Math.random() * (total - i));
+    const tmp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = tmp;
+  }
+
+  return arr.slice(0, count);
+}
+
+function isValidSelection(nums: unknown): nums is number[] {
+  if (!Array.isArray(nums) || nums.length !== 9) return false;
+  const set = new Set(nums);
+  if (set.size !== 9) return false;
+  return nums.every(
+    (n) => Number.isFinite(n) && n >= 1 && n <= PHOTO_COUNT && Math.floor(n) === n,
+  );
+}
+
+function loadOrCreateSelection(): number[] {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (isValidSelection(parsed)) return parsed;
+    }
+  } catch {
+    // ignore
+  }
+
+  const nums = pickUniqueNumbers(9, 1, PHOTO_COUNT);
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(nums));
+  } catch {
+    // ignore
+  }
+  return nums;
+}
+
 export default function PhotoCarousel() {
   const [hovered, setHovered] = useState(false);
 
-  // randomize once per session (first mount), do not reshuffle on re-render
+  // randomize once per session (first mount); persist via sessionStorage; no reshuffle on re-render
   const [photos] = useState(() => {
-    if (cachedPhotos) return cachedPhotos;
-    cachedPhotos = makeSessionPhotos();
-    return cachedPhotos;
+    const nums = loadOrCreateSelection();
+    return nums.map((n) => ({
+      id: `image_${n}`,
+      // match app/photos/page.tsx casing: .JPG
+      src: `${R2_BASE_URL}/image_${n}.JPG`,
+      alt: `image_${n}`,
+    }));
   });
 
   return (
@@ -85,19 +98,14 @@ export default function PhotoCarousel() {
             {photos.map((photo, i) => {
               const preset = BASE_LAYOUT[i % BASE_LAYOUT.length];
 
-              const base = {
-                x: 0,
-                y: 0,
-                rotate: preset.rotate,
-              };
+              const base = { x: 0, y: 0, rotate: preset.rotate };
 
               const jitter = hovered
                 ? {
                     x: (i % 2 === 0 ? 1 : -1) * 10,
                     y: (i % 3 === 0 ? -1 : 1) * 9,
                     rotate:
-                      preset.rotate +
-                      (i === 0 ? 5 : i % 2 === 0 ? 7 : -6),
+                      preset.rotate + (i === 0 ? 5 : i % 2 === 0 ? 7 : -6),
                   }
                 : base;
 
@@ -167,4 +175,3 @@ export default function PhotoCarousel() {
     </section>
   );
 }
-
