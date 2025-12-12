@@ -5,17 +5,39 @@ import { motion } from "framer-motion";
 import Image from "next/image";
 import { useState } from "react";
 
-const PHOTOS = [
-  { src: "/images/featured/photos.jpg", alt: "portfolio" },
-  { src: "/images/strip/iceland.jpg", alt: "iceland 1" },
-  { src: "/images/strip/taipei.jpg", alt: "taipei 1" },
-  { src: "/images/strip/newzealand.jpg", alt: "new zealand 1" },
-  { src: "/images/strip/kyrgyzstan.jpg", alt: "kyrgyzstan 1" },
-  { src: "/images/strip/iceland.jpg", alt: "iceland 2" },
-  { src: "/images/strip/taipei.jpg", alt: "taipei 2" },
-  { src: "/images/strip/newzealand.jpg", alt: "new zealand 2" },
-  { src: "/images/strip/kyrgyzstan.jpg", alt: "kyrgyzstan 2" },
-];
+const R2_BASE =
+  "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos";
+
+// session-level cache (persists across re-renders + remounts in the same tab/session)
+let cachedPhotos:
+  | Array<{
+      src: string;
+      alt: string;
+    }>
+  | null = null;
+
+function pickUniqueNumbers(count: number, min: number, max: number) {
+  const total = max - min + 1;
+  const arr = Array.from({ length: total }, (_, i) => min + i);
+
+  // fisher-yates shuffle (partial)
+  for (let i = 0; i < count; i++) {
+    const j = i + Math.floor(Math.random() * (total - i));
+    const tmp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = tmp;
+  }
+
+  return arr.slice(0, count);
+}
+
+function makeSessionPhotos() {
+  const nums = pickUniqueNumbers(9, 1, 139);
+  return nums.map((n) => ({
+    src: `${R2_BASE}/image_${n}.jpg`,
+    alt: `photo ${n}`,
+  }));
+}
 
 // base layout positions (% inside inner square) to make a loose circle
 const BASE_LAYOUT = [
@@ -33,6 +55,13 @@ const BASE_LAYOUT = [
 export default function PhotoCarousel() {
   const [hovered, setHovered] = useState(false);
 
+  // randomize once per session (first mount); do not reshuffle on re-render
+  const [photos] = useState(() => {
+    if (cachedPhotos) return cachedPhotos;
+    cachedPhotos = makeSessionPhotos();
+    return cachedPhotos;
+  });
+
   return (
     <section
       className="h-full w-full"
@@ -44,7 +73,7 @@ export default function PhotoCarousel() {
         <div className="relative aspect-square w-[88%] max-h-[88%] max-w-[88%]">
           {/* stacked photos */}
           <div className="relative h-full w-full">
-            {PHOTOS.map((photo, i) => {
+            {photos.map((photo, i) => {
               const preset = BASE_LAYOUT[i % BASE_LAYOUT.length];
 
               const base = {
@@ -53,18 +82,16 @@ export default function PhotoCarousel() {
                 rotate: preset.rotate,
               };
 
-              // replace ONLY the transition + jitter block inside the map()
-
               const jitter = hovered
                 ? {
-                    x: (i % 2 === 0 ? 1 : -1) * 10,      // was 14 → tighter
-                    y: (i % 3 === 0 ? -1 : 1) * 9,       // was 12 → tighter
+                    x: (i % 2 === 0 ? 1 : -1) * 10, // was 14 → tighter
+                    y: (i % 3 === 0 ? -1 : 1) * 9, // was 12 → tighter
                     rotate:
                       preset.rotate +
                       (i === 0 ? 5 : i % 2 === 0 ? 7 : -6), // slightly reduced
                   }
                 : base;
-              
+
               return (
                 <motion.div
                   key={photo.src + i}
@@ -78,12 +105,11 @@ export default function PhotoCarousel() {
                   animate={jitter}
                   transition={{
                     type: "spring",
-                    stiffness: 90,   // was 70 → responsive and precise
-                    damping: 27,     // was 23 → cleaner stop
-                    mass: 0.85,      // was 1.05 → shorter, snappier
+                    stiffness: 90, // was 70 → responsive and precise
+                    damping: 27, // was 23 → cleaner stop
+                    mass: 0.85, // was 1.05 → shorter, snappier
                   }}
                 >
-
                   <Image
                     src={photo.src}
                     alt={photo.alt}
