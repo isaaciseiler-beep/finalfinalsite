@@ -43,8 +43,11 @@ export default function ExperienceDeck({
   const [idx, setIdx] = useState(0);
 
   // Used only to compute timeline spacing without relying on layout animations.
-  // Starts at md height to match SSR/hydration, then corrects after mount.
   const [cardH, setCardH] = useState(420);
+
+  // Detect mode flips so we can make the fan-out feel deliberate (slower + stagger).
+  const [prevMode, setPrevMode] = useState<Mode>(mode);
+  useEffect(() => setPrevMode(mode), [mode]);
 
   const cur = items[idx];
 
@@ -54,7 +57,6 @@ export default function ExperienceDeck({
   }, [cur, onActiveYearChange]);
 
   useEffect(() => {
-    // keep idx safe (defensive; items are memoized but avoids edge cases)
     if (!items.length) return;
     setIdx((i) => clamp(i, 0, items.length - 1));
   }, [items.length]);
@@ -75,31 +77,36 @@ export default function ExperienceDeck({
   }
 
   const isCards = mode === "cards";
+  const isFanning = prevMode !== mode;
   const hasPrev = idx > 0;
   const hasNext = idx < items.length - 1;
 
-  const motionTransition = reduce
-    ? { duration: 0.25 }
-    : { duration: 0.55, ease: [0.3, 0, 0.2, 1] as any };
+  // Intentional, slower fan-out; still responsive for normal navigation.
+  const ease = [0.22, 1, 0.36, 1] as any;
+  const baseDuration = reduce ? 0.25 : isFanning ? 0.95 : 0.7;
 
-  // Deck feel: fixed card dimensions; animate transform (x/y) + opacity only.
-  const stackY = [0, 32, 64];
-  const stackOpacity = [1, 0.72, 0.44];
-  const exitX = 180;
+  // Deck stack offsets (no scale/rotate — fixed dimensions; transform only)
+  const stackX = [0, 10, 20];
+  const stackY = [0, 38, 76];
+  const stackOpacity = [1, 0.78, 0.52];
 
-  // Timeline fan-out: cards spread vertically (still fixed height).
-  const timelineGap = 18;
+  // Timeline spacing: thin dividers do the separation, so keep the list tight.
+  const timelineGap = 0;
   const timelineSlot = cardH + timelineGap;
   const timelineHeight = Math.max(
     cardH,
     items.length * timelineSlot - timelineGap,
   );
 
+  // Used to re-trigger the “fan” feel if parents change keys intentionally.
+  // (No behavior changes; only used as a stable render marker.)
+  const fanMarker = fanOutKey;
+
   return (
     <section
       className="relative isolate px-0 pb-8 pt-2 md:pb-10 md:pt-2"
       aria-label="experience cards"
-      data-fan-out-key={fanOutKey}
+      data-fan-out-key={fanMarker}
     >
       {/* nav row — top, arrows left, progress right, only in cards mode */}
       {isCards && (
@@ -127,41 +134,35 @@ export default function ExperienceDeck({
           "relative w-full",
           isCards ? "min-h-[380px] md:min-h-[420px]" : "",
         ].join(" ")}
-        // In timeline mode, cards are absolutely positioned; set an explicit height.
         style={isCards ? undefined : { height: timelineHeight }}
       >
         {items.map((item, index) => {
           const key = makeCardKey(item, index);
-
           const offset = index - idx;
-          const isActive = offset === 0;
+          const isActive = index === idx;
 
-          // Target transform/opacity only (no scale, no layout, no padding/bg animations).
+          // ----- Position + opacity only -----
           let x = 0;
           let y = 0;
           let opacity = 1;
 
           if (isCards) {
             if (offset === 0) {
-              x = 0;
+              x = stackX[0];
               y = stackY[0];
               opacity = stackOpacity[0];
             } else if (offset === 1) {
-              x = 0;
+              x = stackX[1];
               y = stackY[1];
               opacity = stackOpacity[1];
             } else if (offset === 2) {
-              x = 0;
+              x = stackX[2];
               y = stackY[2];
               opacity = stackOpacity[2];
-            } else if (offset < 0) {
-              // past cards: park off to the left, fully transparent
-              x = -exitX;
-              y = 0;
-              opacity = 0;
             } else {
-              // far-future cards: park off to the right, fully transparent
-              x = exitX;
+              // Park everything else at the back of the deck (invisible) so
+              // fan-out to timeline looks like it “emanates” from a single deck.
+              x = stackX[2];
               y = stackY[2];
               opacity = 0;
             }
@@ -181,23 +182,64 @@ export default function ExperienceDeck({
                   : 0
             : 1;
 
+          // Fan-out stagger (only when expanding out of cards mode).
+          const fanningToTimeline = !reduce && isFanning && mode === "timeline";
+          const dist = Math.abs(index - idx);
+          const fanDelay = fanningToTimeline ? Math.min(0.3, dist * 0.03) : 0;
+
+          const cardTransition = {
+            duration: baseDuration,
+            ease,
+            delay: fanDelay,
+          };
+
+          // ----- Visual state for “fan-out feel” -----
+          // Active deck card: solid background, no lines.
+          // Fanned states (stacked cards + timeline): background disappears, lines fade in,
+          // and content switches to a tighter (compact) layout.
+          const compact = !isCards || offset !== 0;
+          const deckStacked = isCards && offset > 0 && offset <= 2;
+          const timeline = !isCards;
+
+          const bgOpacity = isCards && offset === 0 ? 1 : 0; // disappear when fanned
+          const outlineOpacity = deckStacked ? 1 : 0; // thin outline on stacked cards
+          const dividerOpacity =
+            timeline && index !== items.length - 1 ? 1 : 0; // thin separators in timeline
+
+          // Stage the “background -> lines -> compact content” subtly.
+          const bgTransition = {
+            duration: baseDuration * 0.6,
+            ease,
+            delay: fanDelay,
+          };
+          const lineTransition = reduce
+            ? { duration: baseDuration * 0.6, ease, delay: 0 }
+            : {
+                duration: baseDuration * 0.55,
+                ease,
+                delay: fanDelay + 0.08,
+              };
+          const contentTransition = reduce
+            ? { duration: baseDuration * 0.7, ease, delay: 0 }
+            : {
+                duration: baseDuration * 0.7,
+                ease,
+                delay: fanDelay + 0.03,
+              };
+
           return (
             <motion.article
               key={key}
-              // No layout/layoutId; no scale. Only transform + opacity.
               initial={false}
               animate={{ x, y, opacity }}
-              transition={motionTransition}
+              transition={cardTransition}
               drag={isCards && isActive ? ("x" as const) : false}
               dragConstraints={{ left: 0, right: 0 }}
               dragElastic={0.12}
               onDragEnd={(_, info) => {
                 if (!isCards) return;
-                if (info.offset.x < -90 && hasNext) {
-                  setIdx((i) => i + 1);
-                } else if (info.offset.x > 90 && hasPrev) {
-                  setIdx((i) => i - 1);
-                }
+                if (info.offset.x < -90 && hasNext) setIdx((i) => i + 1);
+                else if (info.offset.x > 90 && hasPrev) setIdx((i) => i - 1);
               }}
               onClick={() => {
                 if (!isCards) setIdx(index);
@@ -205,15 +247,55 @@ export default function ExperienceDeck({
               aria-hidden={isCards && !isActive}
               className={[
                 "absolute inset-x-0 top-0 w-full",
-                "overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900",
                 "h-[380px] md:h-[420px]",
+                "overflow-hidden rounded-2xl",
+                // Keep box sizing stable; all visual changes happen via opacity layers.
+                "border border-transparent",
                 "focus:outline-none focus-visible:outline-none",
                 isCards && !isActive ? "pointer-events-none" : "",
                 isCards && isActive ? "cursor-grab active:cursor-grabbing" : "",
               ].join(" ")}
               style={{ zIndex, willChange: "transform" }}
             >
-              <div className="flex h-full flex-col justify-between px-7 py-7 text-left md:px-7 md:py-7">
+              {/* Background layer (fades out when fanned). */}
+              <motion.div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 rounded-2xl bg-neutral-900"
+                initial={false}
+                animate={{ opacity: bgOpacity }}
+                transition={bgTransition}
+              />
+
+              {/* Thin outline for stacked deck cards (fades in as background disappears). */}
+              <motion.div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 rounded-2xl border border-neutral-800"
+                initial={false}
+                animate={{ opacity: outlineOpacity }}
+                transition={lineTransition}
+              />
+
+              {/* Timeline divider line (thin separators; fades in on fan-out). */}
+              <motion.div
+                aria-hidden
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-neutral-800"
+                initial={false}
+                animate={{ opacity: dividerOpacity }}
+                transition={lineTransition}
+              />
+
+              {/* Expanded content (flashcard feel) — shown only for the active deck card. */}
+              <motion.div
+                className="absolute inset-0 z-10 flex h-full flex-col justify-between px-7 py-7 text-left"
+                initial={false}
+                animate={{
+                  opacity: compact ? 0 : 1,
+                  y: compact ? -10 : 0,
+                }}
+                transition={contentTransition}
+                style={{ pointerEvents: compact ? "none" : "auto" }}
+                aria-hidden={compact}
+              >
                 <div>
                   <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted">
                     {item.dates}
@@ -227,14 +309,14 @@ export default function ExperienceDeck({
                   </p>
                 </div>
 
-                {/* In cards mode, only the active card exposes interactive content. */}
-                {item.link && (!isCards || isActive) && (
+                {item.link && (
                   <div className="mt-6">
                     <Link
                       href={item.link}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="group inline-flex items-center gap-2 rounded-md border border-neutral-700 px-4 py-2 text-sm font-medium text-neutral-100 no-underline transition-colors duration-300 hover:border-neutral-50 hover:bg-neutral-50 hover:text-black hover:no-underline focus-visible:outline-none"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       <span className="normal-case">
                         {item.link_text ?? "view details"}
@@ -248,7 +330,59 @@ export default function ExperienceDeck({
                     </Link>
                   </div>
                 )}
-              </div>
+              </motion.div>
+
+              {/* Compact content (timeline/fanned) — tighter spacing; background is gone; lines are in. */}
+              <motion.div
+                className="absolute inset-0 z-10 flex h-full flex-col px-4 py-4 text-left md:px-4 md:py-4"
+                initial={false}
+                animate={{
+                  opacity: compact ? 1 : 0,
+                  y: compact ? 0 : 10,
+                }}
+                transition={contentTransition}
+                // Only the active deck card is interactive in cards mode.
+                style={{
+                  pointerEvents: compact && (!isCards || isActive) ? "auto" : "none",
+                }}
+                aria-hidden={!compact}
+              >
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted">
+                    {item.dates}
+                  </p>
+                  <h3 className="mt-2 text-lg font-semibold tracking-tight md:text-xl">
+                    {item.role}
+                  </h3>
+                  <p className="mt-1 text-sm text-muted">{item.org}</p>
+                  <p className="mt-2 text-sm leading-relaxed text-muted">
+                    {item.summary}
+                  </p>
+
+                  {/* Gap shrink: button sits closer to text (no bottom-pinning). */}
+                  {item.link && (
+                    <div className="mt-3">
+                      <Link
+                        href={item.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group inline-flex items-center gap-2 rounded-md border border-neutral-800 px-3 py-1.5 text-sm font-medium text-neutral-100 no-underline transition-colors duration-300 hover:border-neutral-50 hover:bg-neutral-50 hover:text-black hover:no-underline focus-visible:outline-none"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <span className="normal-case">
+                          {item.link_text ?? "view details"}
+                        </span>
+                        <span
+                          aria-hidden
+                          className="transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                        >
+                          ↗
+                        </span>
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
             </motion.article>
           );
         })}
