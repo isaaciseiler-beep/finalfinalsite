@@ -5,12 +5,16 @@ import { motion } from "framer-motion";
 import Image from "next/image";
 import { useState } from "react";
 
-const R2_BASE =
+const R2_BASE_URL =
+  process.env.NEXT_PUBLIC_R2_BASE_URL ??
   "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos";
 
-// session-level cache (persists across re-renders + remounts in the same tab/session)
+const PHOTO_COUNT = 139;
+
+// session-level cache (persists across re-renders + remounts within the same tab/session)
 let cachedPhotos:
   | Array<{
+      id: string;
       src: string;
       alt: string;
     }>
@@ -20,7 +24,7 @@ function pickUniqueNumbers(count: number, min: number, max: number) {
   const total = max - min + 1;
   const arr = Array.from({ length: total }, (_, i) => min + i);
 
-  // fisher-yates shuffle (partial)
+  // partial fisher-yates shuffle for first `count` picks
   for (let i = 0; i < count; i++) {
     const j = i + Math.floor(Math.random() * (total - i));
     const tmp = arr[i];
@@ -32,11 +36,16 @@ function pickUniqueNumbers(count: number, min: number, max: number) {
 }
 
 function makeSessionPhotos() {
-  const nums = pickUniqueNumbers(9, 1, 139);
-  return nums.map((n) => ({
-    src: `${R2_BASE}/image_${n}.jpg`,
-    alt: `photo ${n}`,
-  }));
+  const nums = pickUniqueNumbers(9, 1, PHOTO_COUNT);
+  return nums.map((n) => {
+    const id = `image_${n}`;
+    return {
+      id,
+      // IMPORTANT: match app/photos/page.tsx casing: .JPG
+      src: `${R2_BASE_URL}/image_${n}.JPG`,
+      alt: id,
+    };
+  });
 }
 
 // base layout positions (% inside inner square) to make a loose circle
@@ -55,7 +64,7 @@ const BASE_LAYOUT = [
 export default function PhotoCarousel() {
   const [hovered, setHovered] = useState(false);
 
-  // randomize once per session (first mount); do not reshuffle on re-render
+  // randomize once per session (first mount), do not reshuffle on re-render
   const [photos] = useState(() => {
     if (cachedPhotos) return cachedPhotos;
     cachedPhotos = makeSessionPhotos();
@@ -84,17 +93,17 @@ export default function PhotoCarousel() {
 
               const jitter = hovered
                 ? {
-                    x: (i % 2 === 0 ? 1 : -1) * 10, // was 14 → tighter
-                    y: (i % 3 === 0 ? -1 : 1) * 9, // was 12 → tighter
+                    x: (i % 2 === 0 ? 1 : -1) * 10,
+                    y: (i % 3 === 0 ? -1 : 1) * 9,
                     rotate:
                       preset.rotate +
-                      (i === 0 ? 5 : i % 2 === 0 ? 7 : -6), // slightly reduced
+                      (i === 0 ? 5 : i % 2 === 0 ? 7 : -6),
                   }
                 : base;
 
               return (
                 <motion.div
-                  key={photo.src + i}
+                  key={photo.id}
                   className="absolute aspect-square w-[44%] sm:w-[40%] md:w-[38%] lg:w-[36%] overflow-hidden border border-white/10 shadow-[0_18px_40px_rgba(0,0,0,0.9)]"
                   style={{
                     top: `${preset.top}%`,
@@ -105,9 +114,9 @@ export default function PhotoCarousel() {
                   animate={jitter}
                   transition={{
                     type: "spring",
-                    stiffness: 90, // was 70 → responsive and precise
-                    damping: 27, // was 23 → cleaner stop
-                    mass: 0.85, // was 1.05 → shorter, snappier
+                    stiffness: 90,
+                    damping: 27,
+                    mass: 0.85,
                   }}
                 >
                   <Image
@@ -158,3 +167,4 @@ export default function PhotoCarousel() {
     </section>
   );
 }
+
