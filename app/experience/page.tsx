@@ -53,8 +53,7 @@ const pressItems: PressItem[] = [
   },
   {
     title: "Awarded 2024 Michigan Truman Scholarship",
-    href:
-      "https://artsci.washu.edu/ampersand/junior-seiler-awarded-truman-scholarship",
+    href: "https://source.washu.edu/2024/04/junior-seiler-awarded-truman-scholarship/",
     source: "Washington University",
     image:
       "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/press/truman.jpg",
@@ -67,10 +66,34 @@ const pressItems: PressItem[] = [
     image:
       "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/press/fulbright.jpg",
   },
+
+  // added items (end, but before university profile)
+  {
+    title: "Truman Scholarship Q+A",
+    href: "",
+    source: "Student Life",
+    image:
+      "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/press/trumanisaac.jpg",
+  },
+  {
+    title: "60 Truman Scholars Announced For 2024",
+    href: "",
+    source: "Forbes",
+    image:
+      "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/press/harrytruman.jpg",
+  },
+  {
+    title: "Included in the best newspaper honor at Missouri College Media awards",
+    href: "",
+    source: "Washington University",
+    image:
+      "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/press/washuspring.png",
+  },
+
   {
     title: "University profile",
     href:
-      "https://artsci.wustl.edu/ampersand/isaac-seiler-setting-his-sights-high",
+      "https://artsci.washu.edu/ampersand/isaac-seiler-setting-his-sights-high",
     source: "Washington University",
     image:
       "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/press/wustl.jpg",
@@ -224,9 +247,7 @@ export default function ExperiencePage() {
             <div className="relative pt-2">
               <Suspense
                 fallback={
-                  <div className="px-4 py-8 text-sm text-muted">
-                    loading…
-                  </div>
+                  <div className="px-4 py-8 text-sm text-muted">loading…</div>
                 }
               >
                 <ExperienceDeck
