@@ -1,4 +1,4 @@
-// app/page.tsx — DROP-IN REPLACEMENT
+// app/page.tsx — DROP-IN REPLACEMENT (adds real h1 without changing visuals)
 import ParallaxHero from "@/components/ParallaxHero";
 import AboutBrief from "@/components/AboutBrief";
 import ProjectsTeaser from "@/components/ProjectsTeaser";
@@ -9,6 +9,8 @@ import ContentFrame from "@/components/ContentFrame";
 export default function Page() {
   return (
     <main className="pb-20 space-y-16 md:space-y-24">
+      <h1 className="sr-only">isaac seiler</h1>
+
       <ParallaxHero
         lines={[
           "Working at the intersection of",
@@ -34,4 +36,3 @@ export default function Page() {
     </main>
   );
 }
-
