@@ -1,11 +1,10 @@
 // app/experience/page.tsx — DROP-IN REPLACEMENT
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Container from "@/components/Container";
 import ExperienceDeck from "@/components/ExperienceDeck";
 import EducationPopup from "@/components/EducationPopup";
-import ViewSwitch from "@/components/ViewSwitch";
 import { motion, useReducedMotion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
@@ -103,24 +102,68 @@ const pressItems: PressItem[] = [
 const CARD_WIDTH = 220; // px
 const CARD_GAP = 16; // px, matches gap-4
 
+function clamp(n: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, n));
+}
+
 export default function ExperiencePage() {
-  const [mode, setMode] = useState<Mode>("cards");
+  // resume stays in expanded mode (no switch)
+  const mode: Mode = "timeline";
+
   const [eduOpen, setEduOpen] = useState(false);
   const [activeYear, setActiveYear] = useState<string>("2025");
+
   const [pressIndex, setPressIndex] = useState(0);
   const reduce = useReducedMotion();
 
   const pressCount = pressItems.length;
   const hasPress = pressCount > 0;
 
+  // clamp carousel so you can fully see the last tile, but never scroll past it
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const [viewportW, setViewportW] = useState(0);
+
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+
+    const update = () => setViewportW(el.clientWidth || 0);
+    update();
+
+    const ro = new ResizeObserver(() => update());
+    ro.observe(el);
+
+    return () => ro.disconnect();
+  }, []);
+
+  const visibleCount = useMemo(() => {
+    if (!viewportW) return 1;
+    // +CARD_GAP so exact-fit math behaves well
+    return Math.max(
+      1,
+      Math.floor((viewportW + CARD_GAP) / (CARD_WIDTH + CARD_GAP))
+    );
+  }, [viewportW]);
+
+  const maxPressIndex = useMemo(() => {
+    return Math.max(0, pressCount - visibleCount);
+  }, [pressCount, visibleCount]);
+
+  useEffect(() => {
+    setPressIndex((prev) => clamp(prev, 0, maxPressIndex));
+  }, [maxPressIndex]);
+
+  const canPrev = pressIndex > 0;
+  const canNext = pressIndex < maxPressIndex;
+
   const goPrevPress = () => {
     if (!hasPress) return;
-    setPressIndex((prev) => (prev - 1 + pressCount) % pressCount);
+    setPressIndex((prev) => Math.max(0, prev - 1));
   };
 
   const goNextPress = () => {
     if (!hasPress) return;
-    setPressIndex((prev) => (prev + 1) % pressCount);
+    setPressIndex((prev) => Math.min(maxPressIndex, prev + 1));
   };
 
   const slideTransition = reduce
@@ -134,39 +177,32 @@ export default function ExperiencePage() {
         {/* reintroduce inner padding for readable layout */}
         <div className="px-4 sm:px-6 pt-[112px] md:pt-[112px]">
           {/* header */}
-          <section className="relative min-h-[40vh] pb-4 md:pb-6">
+          <section className="relative min-h-[18vh] pb-3 md:pb-4">
             <div className="flex justify-end">
               <h1 className="text-right text-5xl font-normal leading-none tracking-tight md:text-7xl">
                 Experience
               </h1>
             </div>
-
-            <div className="mt-10 md:mt-12 flex justify-end">
-              <p className="max-w-xl text-right text-lg leading-relaxed text-muted md:text-xl">
-                lorem ipsum dolor sit amet, consectetur adipiscing elit. sed do
-                eiusmod tempor incididunt ut labore et dolore magna aliqua.
-              </p>
-            </div>
           </section>
 
           {/* education pill */}
-          <section className="mb-6 flex flex-col gap-4 md:mb-8">
+          <section className="mb-6 flex flex-col gap-4 md:mb-7">
             <EducationPopup
               open={eduOpen}
               onToggle={() => setEduOpen((v) => !v)}
             />
           </section>
 
-          {/* in the news reel – vertical "story" cards, multiple visible at once */}
+          {/* in the news reel – clamped (no wrap), no end gap */}
           {hasPress && (
-            <section className="mb-8 md:mb-10">
+            <section className="mb-5 md:mb-6">
               <div className="relative">
-                {/* side gradients, flex with container width */}
+                {/* side gradients */}
                 <div className="pointer-events-none absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-background via-background/70 to-transparent sm:w-16 md:w-20" />
                 <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-background via-background/70 to-transparent sm:w-16 md:w-20" />
 
-                {/* track */}
-                <div className="overflow-hidden">
+                {/* viewport */}
+                <div ref={viewportRef} className="overflow-hidden">
                   <motion.div
                     className="flex gap-4"
                     animate={{ x: -pressIndex * (CARD_WIDTH + CARD_GAP) }}
@@ -175,22 +211,12 @@ export default function ExperiencePage() {
                     dragConstraints={{ left: 0, right: 0 }}
                     dragElastic={0.18}
                     onDragEnd={(_, info) => {
-                      if (info.offset.x < -60) {
-                        goNextPress();
-                      } else if (info.offset.x > 60) {
-                        goPrevPress();
-                      }
+                      if (info.offset.x < -60 && canNext) goNextPress();
+                      else if (info.offset.x > 60 && canPrev) goPrevPress();
                     }}
                   >
-                    {pressItems.map((item, idx) => (
-                      <Link
-                        key={`${item.href}-${idx}`}
-                        href={item.href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block flex-shrink-0 focus-visible:outline-none"
-                      >
-                        {/* tall, vertical story-style card */}
+                    {pressItems.map((item, idx) => {
+                      const Card = (
                         <article className="h-[320px] w-[220px] overflow-hidden rounded-2xl bg-card shadow-[0_0_20px_rgba(0,0,0,0.35)] md:h-[360px]">
                           <div className="relative h-full w-full">
                             {item.image ? (
@@ -204,7 +230,6 @@ export default function ExperiencePage() {
                             ) : (
                               <div className="h-full w-full bg-neutral-800" />
                             )}
-                            {/* dark bottom gradient for headline overlay */}
                             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
                             <div className="absolute inset-x-0 bottom-0 p-4 text-left">
                               {item.source && (
@@ -218,17 +243,50 @@ export default function ExperiencePage() {
                             </div>
                           </div>
                         </article>
-                      </Link>
-                    ))}
+                      );
+
+                      // avoid invalid next/link href="" for items without provided links
+                      if (!item.href) {
+                        return (
+                          <div
+                            key={`${item.title}-${idx}`}
+                            className="block flex-shrink-0"
+                            aria-disabled="true"
+                          >
+                            {Card}
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <Link
+                          key={`${item.href}-${idx}`}
+                          href={item.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block flex-shrink-0 focus-visible:outline-none"
+                        >
+                          {Card}
+                        </Link>
+                      );
+                    })}
                   </motion.div>
                 </div>
               </div>
 
-              {/* controls at bottom: arrows left, progress right */}
+              {/* controls: no wrap; disable at ends */}
               <div className="mt-4 flex items-center justify-between text-xs text-muted">
                 <div className="flex items-center gap-2">
-                  <CarouselNavButton dir="left" onClick={goPrevPress} />
-                  <CarouselNavButton dir="right" onClick={goNextPress} />
+                  <CarouselNavButton
+                    dir="left"
+                    onClick={goPrevPress}
+                    disabled={!canPrev}
+                  />
+                  <CarouselNavButton
+                    dir="right"
+                    onClick={goNextPress}
+                    disabled={!canNext}
+                  />
                 </div>
                 <span className="tabular-nums">
                   {pressIndex + 1} / {pressCount}
@@ -237,14 +295,18 @@ export default function ExperiencePage() {
             </section>
           )}
 
-          {/* view switcher below tiles */}
-          <div className="mb-10 flex items-center justify-center md:mb-12">
-            <ViewSwitch mode={mode} onChange={setMode} />
-          </div>
+          {/* my resume header (experience style, anchored left) */}
+          <section className="mt-6 mb-4 md:mt-7 md:mb-5">
+            <div className="flex justify-start">
+              <h2 className="text-left text-5xl font-normal leading-none tracking-tight md:text-7xl">
+                My Resume
+              </h2>
+            </div>
+          </section>
 
-          {/* unified deck / spread */}
-          <section aria-label="experience views" className="relative">
-            <div className="relative pt-2">
+          {/* resume (expanded only; slimmer spacing; no switch; no card mode) */}
+          <section aria-label="resume" className="relative">
+            <div className="relative pt-1">
               <Suspense
                 fallback={
                   <div className="px-4 py-8 text-sm text-muted">loading…</div>
@@ -268,16 +330,24 @@ export default function ExperiencePage() {
 function CarouselNavButton({
   dir,
   onClick,
+  disabled,
 }: {
   dir: "left" | "right";
   onClick: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       aria-label={dir === "left" ? "previous card" : "next card"}
       onClick={onClick}
-      className="grid h-9 w-9 place-items-center text-xs text-muted transition-colors hover:text-foreground focus-visible:outline-none"
+      disabled={disabled}
+      className={[
+        "grid h-9 w-9 place-items-center text-xs transition-colors focus-visible:outline-none",
+        disabled
+          ? "cursor-not-allowed text-muted/40"
+          : "text-muted hover:text-foreground",
+      ].join(" ")}
     >
       {dir === "left" ? "←" : "→"}
     </button>
