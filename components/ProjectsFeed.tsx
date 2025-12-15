@@ -35,8 +35,11 @@ export default function ProjectsFeed({ items }: { items: FeedItem[] }) {
 
   return (
     <div className="space-y-6">
-      {/* filter tabs (white; clicking active deselects) */}
-      <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {/* filter tabs (id is used by Modal to align the pane top) */}
+      <div
+        id="projects-filter-tabs"
+        className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
         {FILTERS.map((f) => {
           const active = f.key === filter;
           return (
@@ -47,13 +50,16 @@ export default function ProjectsFeed({ items }: { items: FeedItem[] }) {
               aria-pressed={active}
               className={[
                 "shrink-0 rounded-full px-4 py-2 text-sm",
-                "border border-white/15",
+                // base: totally white
                 "bg-white text-black",
-                active
-                  ? "shadow-[0_0_0_1px_rgba(255,255,255,0.35),0_10px_30px_rgba(0,0,0,0.35)]"
-                  : "opacity-85 hover:opacity-95",
-                "transition-[opacity,box-shadow,transform]",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35",
+                // keep layout stable with a transparent border; hover/active becomes white outline
+                "border border-transparent",
+                // hover: black w/ white outline + white text
+                "hover:bg-black hover:text-white hover:border-white",
+                // active: same as hover (also makes selection obvious)
+                active ? "bg-black text-white border-white" : "",
+                "transition-colors",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40",
               ].join(" ")}
             >
               {f.label}
@@ -62,8 +68,11 @@ export default function ProjectsFeed({ items }: { items: FeedItem[] }) {
         })}
       </div>
 
-      {/* 3-column feed, press-style cards */}
-      <motion.ol layout className="grid grid-cols-2 gap-4 sm:gap-5 sm:grid-cols-3">
+      {/* responsive masonry-like grid behavior:
+          - 1 col on xs
+          - 2 cols sooner (sm)
+          - 3 cols on lg */}
+      <motion.ol layout className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
         <AnimatePresence initial={false}>
           {filtered.map((item) => (
             <motion.li
@@ -83,7 +92,7 @@ export default function ProjectsFeed({ items }: { items: FeedItem[] }) {
                         src={item.image}
                         alt={item.title}
                         fill
-                        sizes="(max-width: 768px) 33vw, 260px"
+                        sizes="(max-width: 639px) 100vw, (max-width: 1023px) 50vw, 33vw"
                         className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                         priority={false}
                       />
@@ -99,9 +108,10 @@ export default function ProjectsFeed({ items }: { items: FeedItem[] }) {
                     </div>
 
                     {/* bottom gradient & title */}
-                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
-                    <div className="absolute inset-x-0 bottom-0 z-10 p-4">
-                      <h3 className="text-sm font-semibold leading-snug text-neutral-50 md:text-base line-clamp-2 max-h-[3.1rem] overflow-hidden">
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
+                    <div className="absolute inset-x-0 bottom-0 z-10 p-5 md:p-6">
+                      {/* ~2x bigger than before */}
+                      <h3 className="font-semibold leading-tight text-neutral-50 line-clamp-2 text-lg sm:text-xl lg:text-2xl">
                         {item.title}
                       </h3>
                     </div>
@@ -115,3 +125,4 @@ export default function ProjectsFeed({ items }: { items: FeedItem[] }) {
     </div>
   );
 }
+
