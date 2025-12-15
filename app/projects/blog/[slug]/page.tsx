@@ -1,7 +1,6 @@
-import Link from "next/link";
 import Container from "@/components/Container";
-import { notFound } from "next/navigation";
 import EntryContent from "@/components/EntryContent";
+import { notFound } from "next/navigation";
 import { getEntry, getSlugs } from "@/lib/projectsFeed";
 
 export const dynamic = "force-static";
@@ -17,12 +16,6 @@ export default async function BlogPage({ params }: { params: { slug: string } })
 
   return (
     <Container>
-      <div className="mb-8">
-        <Link href="/projects" className="text-sm text-mutefg no-underline hover:underline">
-          ← projects
-        </Link>
-      </div>
-
       <div className="overflow-hidden rounded-3xl border border-white/10 bg-card shadow-[0_0_40px_rgba(0,0,0,0.35)]">
         <EntryContent
           meta={{

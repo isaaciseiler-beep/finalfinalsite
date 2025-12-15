@@ -1,23 +1,21 @@
-// components/BrandMark.tsx — DROP-IN REPLACEMENT (same look, less bounce)
+// components/BrandMark.tsx  ← DROP-IN REPLACEMENT
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { usePathname } from "next/navigation";
 
 export const BRAND_SPRING = { type: "spring", stiffness: 180, damping: 30 };
 const THRESHOLD_PX = 80;
 
 function useMidScrollCollapse(thresholdPx = THRESHOLD_PX) {
+  const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return window.scrollY > thresholdPx;
-  });
 
   useEffect(() => {
     const y = typeof window !== "undefined" ? window.scrollY : 0;
     setCollapsed(y > thresholdPx);
+    if (y <= thresholdPx) setCollapsed(false);
   }, [pathname, thresholdPx]);
 
   useEffect(() => {
@@ -32,30 +30,27 @@ function useMidScrollCollapse(thresholdPx = THRESHOLD_PX) {
 function useMeasuredWidth<T extends HTMLElement>() {
   const ref = useRef<T | null>(null);
   const [w, setW] = useState<number | null>(null);
-
   useLayoutEffect(() => {
+    if (!ref.current) return;
     const el = ref.current;
-    if (!el) return;
-
     const measure = () => setW(el.getBoundingClientRect().width);
     measure();
-
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-
   return { ref, width: w };
 }
 
 export default function BrandMark() {
   const collapsed = useMidScrollCollapse();
 
+  // measure both states to drive a pure width animation (left-anchored)
   const { ref: fullRef, width: fullW } = useMeasuredWidth<HTMLSpanElement>();
   const { ref: shortRef, width: shortW } = useMeasuredWidth<HTMLSpanElement>();
 
-  const fullWidth = useMemo(() => fullW ?? 320, [fullW]);
-  const miniWidth = useMemo(() => shortW ?? 66, [shortW]);
+  const fullWidth = fullW ?? 320;
+  const miniWidth = shortW ?? 66;
 
   return (
     <motion.span
@@ -69,8 +64,10 @@ export default function BrandMark() {
       initial={false}
       animate={{ width: collapsed ? miniWidth : fullWidth }}
       transition={{ width: BRAND_SPRING }}
+      layout // participate in shared layout animation
     >
       <span className="relative block h-[1.1em]">
+        {/* invisible measurers */}
         <span ref={fullRef} className="invisible absolute left-0 top-0" aria-hidden>
           Isaac Seiler
         </span>
@@ -78,25 +75,37 @@ export default function BrandMark() {
           IIS
         </span>
 
-        <motion.span
-          className="absolute left-0 top-0"
-          initial={false}
-          animate={{ opacity: collapsed ? 0 : 1, x: collapsed ? -6 : 0 }}
-          transition={{ duration: 0.22 }}
-          style={{ pointerEvents: "none" }}
-        >
-          Isaac Seiler
-        </motion.span>
+        {/* full wordmark */}
+        <AnimatePresence initial={false} mode="wait">
+          {!collapsed && (
+            <motion.span
+              key="full"
+              className="absolute left-0 top-0"
+              initial={{ opacity: 0, x: -6 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -6 }}
+              transition={{ duration: 0.28 }}
+            >
+              Isaac Seiler
+            </motion.span>
+          )}
+        </AnimatePresence>
 
-        <motion.span
-          className="absolute left-0 top-0"
-          initial={false}
-          animate={{ opacity: collapsed ? 1 : 0, x: collapsed ? 0 : -6 }}
-          transition={{ duration: 0.2 }}
-          style={{ pointerEvents: "none" }}
-        >
-          IIS
-        </motion.span>
+        {/* collapsed monogram */}
+        <AnimatePresence initial={false} mode="wait">
+          {collapsed && (
+            <motion.span
+              key="mini"
+              className="absolute left-0 top-0"
+              initial={{ opacity: 0, x: -6 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -6 }}
+              transition={{ duration: 0.24 }}
+            >
+              IIS
+            </motion.span>
+          )}
+        </AnimatePresence>
       </span>
     </motion.span>
   );

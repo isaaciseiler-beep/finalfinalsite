@@ -16,27 +16,26 @@ type FeedItem = {
   image?: string;
 };
 
-type Filter = "all" | Kind;
+type Filter = Kind | null;
 
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: "all", label: "For you" },
+const FILTERS: { key: Kind; label: string }[] = [
   { key: "project", label: "Projects" },
-  { key: "blog", label: "Blog posts" },
+  { key: "blog", label: "Blog" },
   { key: "article", label: "Articles" },
 ];
 
 export default function ProjectsFeed({ items }: { items: FeedItem[] }) {
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<Filter>(null);
   const reduce = useReducedMotion();
 
   const filtered = useMemo(() => {
-    if (filter === "all") return items;
+    if (!filter) return items;
     return items.filter((x) => x.kind === filter);
   }, [filter, items]);
 
   return (
     <div className="space-y-6">
-      {/* Pinterest-like top chips */}
+      {/* filter tabs (white; clicking active deselects) */}
       <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {FILTERS.map((f) => {
           const active = f.key === filter;
@@ -44,15 +43,17 @@ export default function ProjectsFeed({ items }: { items: FeedItem[] }) {
             <button
               key={f.key}
               type="button"
-              onClick={() => setFilter(f.key)}
+              onClick={() => setFilter((prev) => (prev === f.key ? null : f.key))}
               aria-pressed={active}
               className={[
-                "shrink-0 rounded-full px-4 py-2 text-sm transition-colors",
-                "border border-white/10",
+                "shrink-0 rounded-full px-4 py-2 text-sm",
+                "border border-white/15",
+                "bg-white text-black",
                 active
-                  ? "bg-foreground text-background"
-                  : "bg-white/[0.03] text-mutefg hover:bg-white/[0.06] hover:text-foreground",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25",
+                  ? "shadow-[0_0_0_1px_rgba(255,255,255,0.35),0_10px_30px_rgba(0,0,0,0.35)]"
+                  : "opacity-85 hover:opacity-95",
+                "transition-[opacity,box-shadow,transform]",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35",
               ].join(" ")}
             >
               {f.label}
@@ -61,8 +62,8 @@ export default function ProjectsFeed({ items }: { items: FeedItem[] }) {
         })}
       </div>
 
-      {/* 2-wide consistent cards, press-card styling */}
-      <motion.ol layout className="grid grid-cols-2 gap-4 sm:gap-5">
+      {/* 3-column feed, press-style cards */}
+      <motion.ol layout className="grid grid-cols-2 gap-4 sm:gap-5 sm:grid-cols-3">
         <AnimatePresence initial={false}>
           {filtered.map((item) => (
             <motion.li
@@ -71,18 +72,10 @@ export default function ProjectsFeed({ items }: { items: FeedItem[] }) {
               initial={reduce ? undefined : { opacity: 0, scale: 0.985 }}
               animate={reduce ? undefined : { opacity: 1, scale: 1 }}
               exit={reduce ? undefined : { opacity: 0, scale: 0.985 }}
-              transition={
-                reduce
-                  ? { duration: 0 }
-                  : { duration: 0.18, ease: "easeOut" }
-              }
+              transition={reduce ? { duration: 0 } : { duration: 0.18, ease: "easeOut" }}
               whileTap={reduce ? undefined : { scale: 0.985 }}
             >
-              <Link
-                href={item.href}
-                scroll={false}
-                className="group block focus-visible:outline-none"
-              >
+              <Link href={item.href} scroll={false} className="group block focus-visible:outline-none">
                 <article className="relative overflow-hidden rounded-2xl bg-card shadow-[0_0_20px_rgba(0,0,0,0.35)] ring-1 ring-white/10 transition-transform duration-200 will-change-transform group-hover:-translate-y-0.5 group-active:translate-y-0">
                   <div className="relative aspect-[11/16] w-full">
                     {item.image ? (
@@ -90,7 +83,7 @@ export default function ProjectsFeed({ items }: { items: FeedItem[] }) {
                         src={item.image}
                         alt={item.title}
                         fill
-                        sizes="(max-width: 768px) 50vw, 360px"
+                        sizes="(max-width: 768px) 33vw, 260px"
                         className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                         priority={false}
                       />

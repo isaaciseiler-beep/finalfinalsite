@@ -9,7 +9,6 @@ export type FeedEntry = {
   kindLabel: string;
   slug: string;
   href: string;
-
   title: string;
   summary?: string;
   date?: string;
@@ -22,7 +21,6 @@ export type FeedEntry = {
 type EntrySource = {
   kind: EntryKind;
   kindLabel: string;
-  // allow multiple dirs for a kind (blog often lives in /blog or /posts)
   dirs: string[];
   hrefForSlug: (slug: string) => string;
 };
@@ -37,7 +35,7 @@ const SOURCES: EntrySource[] = [
   {
     kind: "blog",
     kindLabel: "Blog Post",
-    dirs: ["blog", "posts"],
+    dirs: ["blog"],
     hrefForSlug: (slug) => `/projects/blog/${slug}`,
   },
   {
@@ -96,7 +94,6 @@ export function splitFrontmatter(source: string): { data: Record<string, unknown
       value = value.slice(1, -1);
     }
 
-    // arrays: [a, b, c]
     if (value.startsWith("[") && value.endsWith("]")) {
       const inner = value.slice(1, -1).trim();
       const arr = inner
@@ -123,7 +120,6 @@ export function splitFrontmatter(source: string): { data: Record<string, unknown
       continue;
     }
 
-    // keep YYYY-MM-DD as string
     if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
       data[key] = value;
       continue;
@@ -151,12 +147,16 @@ export function formatDate(date?: string) {
   if (!date) return "undated";
   const d = new Date(date);
   if (Number.isNaN(d.getTime())) return date;
-  return new Intl.DateTimeFormat("en", { year: "numeric", month: "short", day: "2-digit" }).format(
-    d,
-  );
+  return new Intl.DateTimeFormat("en", { year: "numeric", month: "short", day: "2-digit" }).format(d);
 }
 
-/* ---------- minimal markdown -> html (matches your existing style) ---------- */
+function normalizeImage(data: Record<string, unknown>) {
+  const img = typeof data.image === "string" ? data.image : undefined;
+  const cover = typeof data.cover === "string" ? data.cover : undefined;
+  return img ?? cover;
+}
+
+/* ---------- minimal markdown -> html (same approach as your projects/[slug]) ---------- */
 
 function escapeHtml(s: string) {
   return s
@@ -166,6 +166,7 @@ function escapeHtml(s: string) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 }
+
 function escapeAttr(s: string) {
   return escapeHtml(s);
 }
@@ -188,13 +189,10 @@ function renderInline(raw: string): string {
   });
 
   s = escapeHtml(s);
-
   s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   s = s.replace(/(^|[\s(])\*([^*]+)\*(?=[\s).,!?]|$)/g, "$1<em>$2</em>");
-
   s = s.replace(/@@LINK(\d+)@@/g, (_m, i) => links[Number(i)] ?? "");
   s = s.replace(/@@CODE(\d+)@@/g, (_m, i) => `<code>${codes[Number(i)] ?? ""}</code>`);
-
   return s;
 }
 
@@ -342,14 +340,6 @@ export function markdownToHtml(markdown: string): string {
   return out.join("\n");
 }
 
-/* ---------- feed + entry fetchers ---------- */
-
-function normalizeImage(data: Record<string, unknown>) {
-  const img = typeof data.image === "string" ? data.image : undefined;
-  const cover = typeof data.cover === "string" ? data.cover : undefined;
-  return img ?? cover;
-}
-
 export async function getFeedEntries(): Promise<FeedEntry[]> {
   const all: FeedEntry[] = [];
 
@@ -358,8 +348,9 @@ export async function getFeedEntries(): Promise<FeedEntry[]> {
       const dir = contentDir(dirName);
       const entries = await safeReadDir(dir);
 
-      const mdxFiles = entries.filter((e) => e.isFile() && e.name.endsWith(".mdx"));
-      for (const e of mdxFiles) {
+      for (const e of entries) {
+        if (!e.isFile() || !e.name.endsWith(".mdx")) continue;
+
         const slug = e.name.replace(/\.mdx$/, "");
         const raw = await safeReadFile(path.join(dir, e.name));
         if (!raw) continue;
@@ -374,9 +365,6 @@ export async function getFeedEntries(): Promise<FeedEntry[]> {
           ? data.tags.filter((t) => typeof t === "string").map(String)
           : undefined;
 
-        const image = normalizeImage(data);
-        const readingMinutes = estimateReadingMinutes(content);
-
         all.push({
           id: `${src.kind}:${dirName}:${slug}`,
           kind: src.kind,
@@ -387,15 +375,14 @@ export async function getFeedEntries(): Promise<FeedEntry[]> {
           summary,
           date,
           tags,
-          image,
+          image: normalizeImage(data),
           pinned,
-          readingMinutes,
+          readingMinutes: estimateReadingMinutes(content),
         });
       }
     }
   }
 
-  // Keep only entries with a title (summary optional for this new card UI)
   return all
     .filter((x) => Boolean(x.title))
     .sort((a, b) => {
@@ -417,8 +404,7 @@ export async function getSlugs(kind: EntryKind): Promise<string[]> {
 
   const slugs: string[] = [];
   for (const dirName of src.dirs) {
-    const dir = contentDir(dirName);
-    const entries = await safeReadDir(dir);
+    const entries = await safeReadDir(contentDir(dirName));
     for (const e of entries) {
       if (e.isFile() && e.name.endsWith(".mdx")) slugs.push(e.name.replace(/\.mdx$/, ""));
     }
@@ -426,21 +412,15 @@ export async function getSlugs(kind: EntryKind): Promise<string[]> {
   return Array.from(new Set(slugs));
 }
 
-export async function getEntry(kind: EntryKind, slug: string): Promise<{
-  meta: FeedEntry;
-  content: string;
-  html: string;
-} | null> {
+export async function getEntry(kind: EntryKind, slug: string): Promise<{ meta: FeedEntry; html: string } | null> {
   const src = SOURCES.find((s) => s.kind === kind);
   if (!src) return null;
 
   for (const dirName of src.dirs) {
-    const file = path.join(contentDir(dirName), `${slug}.mdx`);
-    const raw = await safeReadFile(file);
+    const raw = await safeReadFile(path.join(contentDir(dirName), `${slug}.mdx`));
     if (!raw) continue;
 
     const { data, content } = splitFrontmatter(raw);
-
     const title = typeof data.title === "string" ? data.title : slug.replace(/-/g, " ");
     const summary = typeof data.summary === "string" ? data.summary : undefined;
     const date = typeof data.date === "string" ? data.date : undefined;
@@ -449,28 +429,22 @@ export async function getEntry(kind: EntryKind, slug: string): Promise<{
       ? data.tags.filter((t) => typeof t === "string").map(String)
       : undefined;
 
-    const image = normalizeImage(data);
-    const readingMinutes = estimateReadingMinutes(content);
-    const html = markdownToHtml(content);
-
-    return {
-      meta: {
-        id: `${src.kind}:${dirName}:${slug}`,
-        kind: src.kind,
-        kindLabel: src.kindLabel,
-        slug,
-        href: src.hrefForSlug(slug),
-        title,
-        summary,
-        date,
-        tags,
-        image,
-        pinned,
-        readingMinutes,
-      },
-      content,
-      html,
+    const meta: FeedEntry = {
+      id: `${src.kind}:${dirName}:${slug}`,
+      kind: src.kind,
+      kindLabel: src.kindLabel,
+      slug,
+      href: src.hrefForSlug(slug),
+      title,
+      summary,
+      date,
+      tags,
+      image: normalizeImage(data),
+      pinned,
+      readingMinutes: estimateReadingMinutes(content),
     };
+
+    return { meta, html: markdownToHtml(content) };
   }
 
   return null;

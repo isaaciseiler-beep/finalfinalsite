@@ -4,6 +4,10 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 
+/**
+ * Modal that only covers the content pane (not the fixed sidebar/brand).
+ * Sidebar + brand are higher z-index layers and are never blurred/darkened.
+ */
 export default function Modal({
   title,
   children,
@@ -38,11 +42,12 @@ export default function Modal({
     : ({ duration: 0.22, ease: [0.4, 0.0, 0.2, 1] } as any);
 
   return (
-    <div className="fixed inset-0 z-50">
-      {/* overlay */}
+    // z-[40] sits under Sidebar (z-[50]) and Brand (z-[60])
+    <div className="fixed inset-0 z-[40]" style={{ left: "var(--sidebar-offset)" } as any}>
+      {/* overlay: dark + slight blur behind the popup */}
       <motion.button
         type="button"
-        aria-label="Close dialog"
+        aria-label="Close"
         className="absolute inset-0 h-full w-full bg-black/60 backdrop-blur-[2px]"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -51,7 +56,7 @@ export default function Modal({
         onClick={() => router.back()}
       />
 
-      {/* sheet/panel */}
+      {/* centered panel within the content pane */}
       <div className="absolute inset-0 flex items-end justify-center p-0 sm:items-center sm:p-6">
         <motion.div
           role="dialog"

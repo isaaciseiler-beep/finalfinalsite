@@ -1,3 +1,8 @@
+// app/projects/layout.tsx
+"use client";
+
+import Reveal from "@/components/Reveal";
+
 export default function ProjectsLayout({
   children,
   modal,
@@ -7,7 +12,7 @@ export default function ProjectsLayout({
 }) {
   return (
     <>
-      {children}
+      <Reveal>{children}</Reveal>
       {modal}
     </>
   );
