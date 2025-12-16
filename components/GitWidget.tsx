@@ -39,6 +39,9 @@ export default function GitWidget({ repoUrl, stars }: Props) {
   const [weeks, setWeeks] = React.useState<CommitActivityWeek[] | null>(null);
   const [loading, setLoading] = React.useState(false);
 
+  // hook-safe: always called, never conditional
+  const fallbackWeeks = React.useMemo(() => buildFallbackWeeks(repoUrl), [repoUrl]);
+
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     window.addEventListener("keydown", onKey);
@@ -70,7 +73,6 @@ export default function GitWidget({ repoUrl, stars }: Props) {
     };
 
     const fetchCommitActivity = async () => {
-      // GitHub stats endpoints are flaky (often 202/403). We try, but never block UI.
       const started = Date.now();
       const timeoutMs = 6500;
 
@@ -88,13 +90,11 @@ export default function GitWidget({ repoUrl, stars }: Props) {
               setTimeout(poll, 900);
               return;
             }
-            // give up quietly; fallback grid will render
             if (!cancelled) setWeeks(null);
             return;
           }
 
           if (!res.ok) {
-            // rate limits / forbidden / transient failures: fallback grid will render
             if (!cancelled) setWeeks(null);
             return;
           }
@@ -126,6 +126,8 @@ export default function GitWidget({ repoUrl, stars }: Props) {
 
   // footer text style — matches copyright
   const footerText = "text-sm text-neutral-950/80";
+
+  const showLive = !!weeks && weeks.length > 0;
 
   return (
     <div className="relative">
@@ -199,11 +201,8 @@ export default function GitWidget({ repoUrl, stars }: Props) {
                         <div className="mt-3">
                           <CommitGrid
                             weeks={weeks}
-                            fallbackWeeks={React.useMemo(
-                              () => buildFallbackWeeks(repoUrl),
-                              [repoUrl]
-                            )}
-                            showLive={!!weeks && weeks.length > 0}
+                            fallbackWeeks={fallbackWeeks}
+                            showLive={showLive}
                             loading={loading}
                           />
                         </div>
@@ -262,7 +261,6 @@ function CommitGrid({
   showLive: boolean;
   loading: boolean;
 }) {
-  // guaranteed data source for rendering
   const data = weeks && weeks.length > 0 ? weeks : fallbackWeeks;
 
   const allDays = data.flatMap((w) => w.days);
@@ -292,7 +290,6 @@ function CommitGrid({
     }
   };
 
-  // build day rows (Sun..Sat), each row is week columns
   const rows = Array.from({ length: 7 }, (_, dayIdx) =>
     data.map((w) => w.days?.[dayIdx] ?? 0)
   );
@@ -329,7 +326,6 @@ function CommitGrid({
         ))}
       </div>
 
-      {/* optional: keep silent, but nudge state if you want; currently hidden unless loading */}
       {loading && !showLive ? (
         <div className="mt-2 text-xs text-neutral-950/60">loading…</div>
       ) : null}
@@ -337,17 +333,11 @@ function CommitGrid({
   );
 }
 
-/**
- * deterministic fallback that always renders:
- * - stable per repoUrl
- * - roughly “git-like” distribution (mostly 0/low, occasional clusters)
- */
 function buildFallbackWeeks(repoUrl: string): CommitActivityWeek[] {
   const now = new Date();
   const startOfWeek = new Date(now);
   startOfWeek.setHours(0, 0, 0, 0);
-  // align to Sunday
-  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay()); // sunday
 
   const seed = fnv1a(repoUrl);
   const rand = mulberry32(seed);
@@ -355,48 +345,38 @@ function buildFallbackWeeks(repoUrl: string): CommitActivityWeek[] {
   const weeks: CommitActivityWeek[] = [];
   const weekCount = 52;
 
-  // occasional activity “bursts”
-  const burstCenters = Array.from({ length: 4 }, () =>
-    Math.floor(rand() * weekCount)
-  );
+  const burstCenters = Array.from({ length: 4 }, () => Math.floor(rand() * weekCount));
 
   for (let i = weekCount - 1; i >= 0; i--) {
     const weekDate = new Date(startOfWeek);
     weekDate.setDate(weekDate.getDate() - i * 7);
     const weekUnix = Math.floor(weekDate.getTime() / 1000);
 
-    const days = Array.from({ length: 7 }, (_, di) => {
-      // baseline: mostly zero/low
+    const idx = weekCount - 1 - i;
+
+    const days = Array.from({ length: 7 }, () => {
       let v = rand() < 0.62 ? 0 : rand() < 0.8 ? 1 : rand() < 0.93 ? 2 : 3;
 
-      // add clustered bursts
-      const idx = weekCount - 1 - i;
       for (const c of burstCenters) {
         const dist = Math.abs(idx - c);
-        if (dist <= 3) {
+        if (dist <= 3 && rand() < 0.55) {
           const bump = dist === 0 ? 4 : dist === 1 ? 3 : dist === 2 ? 2 : 1;
-          if (rand() < 0.55) v += bump;
+          v += bump;
         }
       }
 
-      // small day-to-day variance
       if (rand() < 0.12) v += 1;
       if (rand() < 0.06) v += 2;
 
       return Math.max(0, Math.min(12, v));
     });
 
-    weeks.push({
-      week: weekUnix,
-      days,
-      total: days.reduce((a, b) => a + b, 0),
-    });
+    weeks.push({ week: weekUnix, days, total: days.reduce((a, b) => a + b, 0) });
   }
 
   return weeks;
 }
 
-// tiny deterministic PRNG
 function mulberry32(a: number) {
   return function () {
     let t = (a += 0x6d2b79f5);
@@ -406,7 +386,6 @@ function mulberry32(a: number) {
   };
 }
 
-// stable hash
 function fnv1a(str: string) {
   let h = 0x811c9dc5;
   for (let i = 0; i < str.length; i++) {
@@ -415,3 +394,4 @@ function fnv1a(str: string) {
   }
   return h >>> 0;
 }
+
