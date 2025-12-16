@@ -8,36 +8,36 @@ function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
-type TileProps = {
+type BlobTileProps = {
   label: string;
   href: string;
   blobColor: string;
-  textOnBlob: string;
-  align: "start" | "end";
+  hoverTextClassName: string;
   external?: boolean;
 };
 
-function BlobTile({
-  label,
-  href,
-  blobColor,
-  textOnBlob,
-  align,
-  external,
-}: TileProps) {
+function BlobTile({ label, href, blobColor, hoverTextClassName, external }: BlobTileProps) {
   const ref = React.useRef<HTMLAnchorElement | null>(null);
   const raf = React.useRef<number | null>(null);
-  const last = React.useRef({ x: 0, y: 0, rx: 0, ry: 0 });
 
-  const setVars = React.useCallback(() => {
+  const last = React.useRef({
+    mx: 0,
+    my: 0,
+    hx: 0,
+    hy: 0,
+    rx: 0,
+    ry: 0,
+  });
+
+  const applyVars = React.useCallback(() => {
     const el = ref.current;
     if (!el) return;
-    const { x, y, rx, ry } = last.current;
 
-    el.style.setProperty("--mx", `${x.toFixed(2)}px`);
-    el.style.setProperty("--my", `${y.toFixed(2)}px`);
-    el.style.setProperty("--hx", `${(x * 1.8).toFixed(2)}px`);
-    el.style.setProperty("--hy", `${(y * 1.8).toFixed(2)}px`);
+    const { mx, my, hx, hy, rx, ry } = last.current;
+    el.style.setProperty("--mx", `${mx.toFixed(2)}px`);
+    el.style.setProperty("--my", `${my.toFixed(2)}px`);
+    el.style.setProperty("--hx", `${hx.toFixed(2)}px`);
+    el.style.setProperty("--hy", `${hy.toFixed(2)}px`);
     el.style.setProperty("--rx", `${rx.toFixed(2)}deg`);
     el.style.setProperty("--ry", `${ry.toFixed(2)}deg`);
 
@@ -53,34 +53,33 @@ function BlobTile({
       const px = ((e.clientX - r.left) / Math.max(1, r.width)) * 2 - 1;
       const py = ((e.clientY - r.top) / Math.max(1, r.height)) * 2 - 1;
 
-      const mx = clamp(px, -1, 1) * 14;
-      const my = clamp(py, -1, 1) * 14;
+      const mx = clamp(px, -1, 1) * 16;
+      const my = clamp(py, -1, 1) * 16;
 
-      const ry = clamp(px, -1, 1) * 6;
-      const rx = clamp(py, -1, 1) * -6;
+      last.current = {
+        mx,
+        my,
+        hx: mx * 1.6,
+        hy: my * 1.6,
+        rx: clamp(py, -1, 1) * -6,
+        ry: clamp(px, -1, 1) * 6,
+      };
 
-      last.current = { x: mx, y: my, rx, ry };
-
-      if (raf.current == null) raf.current = window.requestAnimationFrame(setVars);
+      if (raf.current == null) raf.current = window.requestAnimationFrame(applyVars);
     },
-    [setVars]
+    [applyVars]
   );
 
   const onPointerLeave = React.useCallback(() => {
-    last.current = { x: 0, y: 0, rx: 0, ry: 0 };
-    if (raf.current == null) raf.current = window.requestAnimationFrame(setVars);
-  }, [setVars]);
+    last.current = { mx: 0, my: 0, hx: 0, hy: 0, rx: 0, ry: 0 };
+    if (raf.current == null) raf.current = window.requestAnimationFrame(applyVars);
+  }, [applyVars]);
 
   React.useEffect(() => {
     return () => {
       if (raf.current != null) window.cancelAnimationFrame(raf.current);
     };
   }, []);
-
-  const baseAlign =
-    align === "start"
-      ? "items-start justify-start text-left"
-      : "items-end justify-end text-right";
 
   return (
     <a
@@ -91,7 +90,7 @@ function BlobTile({
       onPointerMove={onPointerMove}
       onPointerLeave={onPointerLeave}
       style={{ ["--blob" as any]: blobColor } as React.CSSProperties}
-      className="contact-tile group block w-full rounded-[28px] outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+      className="contact-tile contact-tile--square group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
       aria-label={label}
     >
       <span className="contact-tile__plate" aria-hidden="true" />
@@ -105,18 +104,14 @@ function BlobTile({
         </span>
       </span>
 
-      <div
-        className={
-          "relative z-[2] flex h-full w-full flex-col p-8 md:p-10 transition-all duration-500 ease-out " +
-          baseAlign +
-          " group-hover:items-center group-hover:justify-center group-hover:text-center"
-        }
-      >
-        <div className="text-[clamp(44px,7vw,84px)] font-normal leading-none tracking-tight text-black group-hover:text-inherit">
+      <div className="relative z-[2] flex h-full w-full items-center justify-center">
+        <div
+          className={
+            "text-[clamp(44px,7vw,88px)] font-normal leading-none tracking-tight text-black transition-colors duration-300 " +
+            hoverTextClassName
+          }
+        >
           {label}
-        </div>
-        <div className="mt-3 text-sm tracking-tight opacity-70 md:text-base text-black group-hover:text-inherit">
-          {textOnBlob}
         </div>
       </div>
     </a>
@@ -129,27 +124,23 @@ export default function Contact() {
       <div className="-mx-4 sm:-mx-6 h-full">
         <div className="flex h-full flex-col px-4 sm:px-6 pt-[112px] md:pt-[112px]">
           <div className="min-h-0 flex-1">
-            <div className="flex h-full min-h-0 flex-col gap-4 md:flex-row md:gap-6">
-              {/* top-anchored */}
-              <div className="flex min-h-0 flex-1 md:items-start">
+            <div className="flex h-full flex-col justify-between gap-4 md:flex-row md:gap-6">
+              <div className="flex items-start justify-center md:flex-1">
                 <BlobTile
                   label="Connect"
                   href="https://www.linkedin.com/in/isaaciseiler/"
                   external
                   blobColor="#3e50cd"
-                  textOnBlob="open linkedin"
-                  align="start"
+                  hoverTextClassName="group-hover:text-white"
                 />
               </div>
 
-              {/* bottom-anchored */}
-              <div className="flex min-h-0 flex-1 md:items-end">
+              <div className="flex items-end justify-center md:flex-1">
                 <BlobTile
                   label="Email"
                   href="mailto:isaaciseiler@gmail.com"
                   blobColor="#aa96af"
-                  textOnBlob="compose email"
-                  align="end"
+                  hoverTextClassName="group-hover:text-black/90"
                 />
               </div>
             </div>
