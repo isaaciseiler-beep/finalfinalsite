@@ -9,8 +9,6 @@ import { motion, useReducedMotion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
 
-type Mode = "cards" | "timeline";
-
 export const dynamic = "force-static";
 
 type PressItem = {
@@ -65,8 +63,6 @@ const pressItems: PressItem[] = [
     image:
       "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/press/fulbright.jpg",
   },
-
-  // added items (end, but before university profile)
   {
     title: "Truman Scholarship Q+A",
     href: "",
@@ -88,7 +84,6 @@ const pressItems: PressItem[] = [
     image:
       "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/press/washuspring.png",
   },
-
   {
     title: "University profile",
     href:
@@ -107,11 +102,7 @@ function clamp(n: number, min: number, max: number) {
 }
 
 export default function ExperiencePage() {
-  // resume stays in expanded mode (no switch)
-  const mode: Mode = "timeline";
-
   const [eduOpen, setEduOpen] = useState(false);
-  const [activeYear, setActiveYear] = useState<string>("2025");
 
   const [pressIndex, setPressIndex] = useState(0);
   const reduce = useReducedMotion();
@@ -138,7 +129,6 @@ export default function ExperiencePage() {
 
   const visibleCount = useMemo(() => {
     if (!viewportW) return 1;
-    // +CARD_GAP so exact-fit math behaves well
     return Math.max(
       1,
       Math.floor((viewportW + CARD_GAP) / (CARD_WIDTH + CARD_GAP)),
@@ -172,27 +162,35 @@ export default function ExperiencePage() {
 
   return (
     <Container>
-      {/* cancel Container's side padding so content hits the pane edge */}
-      <div className="-mx-4 sm:-mx-6">
-        {/* reintroduce inner padding for readable layout */}
+      {/* prevent any horizontal overflow / sideways page scroll */}
+      <div className="-mx-4 sm:-mx-6 overflow-x-hidden">
         <div className="px-4 sm:px-6 pt-[112px] md:pt-[112px]">
-          {/* education header + popup (replaces Experience header) */}
-          <section className="pb-4 md:pb-5">
+          {/* education */}
+          <section className="pb-5 md:pb-6">
             <EducationPopup
               open={eduOpen}
               onToggle={() => setEduOpen((v) => !v)}
             />
           </section>
 
-          {/* in the news reel – clamped (no wrap), no end gap */}
+          {/* news header */}
           {hasPress && (
-            <section className="mb-5 md:mb-6">
+            <section className="mb-4 md:mb-5">
+              <div className="flex justify-start">
+                <h2 className="text-left text-4xl font-normal leading-none tracking-tight md:text-6xl">
+                  News
+                </h2>
+              </div>
+            </section>
+          )}
+
+          {/* press carousel */}
+          {hasPress && (
+            <section className="mb-7 md:mb-8">
               <div className="relative">
-                {/* side gradients */}
                 <div className="pointer-events-none absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-background via-background/70 to-transparent sm:w-16 md:w-20" />
                 <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-background via-background/70 to-transparent sm:w-16 md:w-20" />
 
-                {/* viewport */}
                 <div ref={viewportRef} className="overflow-hidden">
                   <motion.div
                     className="flex gap-4"
@@ -236,7 +234,6 @@ export default function ExperiencePage() {
                         </article>
                       );
 
-                      // avoid invalid next/link href="" for items without provided links
                       if (!item.href) {
                         return (
                           <div
@@ -265,7 +262,6 @@ export default function ExperiencePage() {
                 </div>
               </div>
 
-              {/* controls: no wrap; disable at ends */}
               <div className="mt-4 flex items-center justify-between text-xs text-muted">
                 <div className="flex items-center gap-2">
                   <CarouselNavButton
@@ -286,31 +282,24 @@ export default function ExperiencePage() {
             </section>
           )}
 
-          {/* my resume header (experience style, anchored left) */}
-          <section className="mt-6 mb-4 md:mt-7 md:mb-5">
+          {/* resume header (20% smaller + rename) */}
+          <section className="mb-4 md:mb-5">
             <div className="flex justify-start">
-              <h2 className="text-left text-5xl font-normal leading-none tracking-tight md:text-7xl">
-                My Resume
+              <h2 className="text-left text-4xl font-normal leading-none tracking-tight md:text-6xl">
+                Resume
               </h2>
             </div>
           </section>
 
-          {/* resume (expanded only; no switch; no card mode) */}
-          <section aria-label="resume" className="relative">
-            <div className="relative pt-1">
-              <Suspense
-                fallback={
-                  <div className="px-4 py-8 text-sm text-muted">loading…</div>
-                }
-              >
-                <ExperienceDeck
-                  mode={mode}
-                  fanOutKey="experience"
-                  activeYear={activeYear}
-                  onActiveYearChange={setActiveYear}
-                />
-              </Suspense>
-            </div>
+          {/* resume list */}
+          <section aria-label="resume" className="relative overflow-x-hidden">
+            <Suspense
+              fallback={
+                <div className="px-4 py-8 text-sm text-muted">loading…</div>
+              }
+            >
+              <ExperienceDeck mode="timeline" fanOutKey="experience" />
+            </Suspense>
           </section>
         </div>
       </div>
@@ -330,7 +319,7 @@ function CarouselNavButton({
   return (
     <button
       type="button"
-      aria-label={dir === "left" ? "previous card" : "next card"}
+      aria-label={dir === "left" ? "previous" : "next"}
       onClick={onClick}
       disabled={disabled}
       className={[
@@ -344,3 +333,4 @@ function CarouselNavButton({
     </button>
   );
 }
+
