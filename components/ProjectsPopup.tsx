@@ -64,76 +64,76 @@ export default function ProjectsPopup({
     };
   }, [open, onClose]);
 
-  const top = useMemo(() => {
-    // keep it starting around the filter-row region, but never too high/low
-    return clamp(Math.round(topPx || 112), 88, 220);
-  }, [topPx]);
+  const top = useMemo(() => clamp(Math.round(topPx || 112), 88, 220), [topPx]);
 
   const overlayTransition = reduce
     ? { duration: 0 }
-    : { duration: 0.18, ease: "easeOut" as const };
+    : { duration: 0.22, ease: [0.22, 1, 0.36, 1] as any };
 
   const panelTransition = reduce
     ? { duration: 0 }
-    : ({
-        duration: 0.28,
-        ease: [0.16, 1, 0.3, 1], // smooth, “consumer app” ease-out
-      } as any);
+    : { duration: 0.32, ease: [0.16, 1, 0.3, 1] as any };
 
   return (
     <AnimatePresence>
       {open && entry && (
         <motion.div
-          className="fixed inset-y-0 right-0 z-[55]"
-          // cover only the content pane, never the sidebar
+          className="fixed inset-0 z-[45]"
+          // cover only the content pane (never the sidebar/logo)
           style={{ left: "var(--sidebar-offset, 0px)" } as any}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={overlayTransition}
         >
-          {/* backdrop: dim + blur (content pane only) */}
-          <motion.div
-            className="absolute inset-0 bg-black/55 backdrop-blur-md"
+          {/* backdrop: dim + blur */}
+          <motion.button
+            type="button"
+            aria-label="close popup"
+            onClick={onClose}
+            className={[
+              "absolute inset-0 h-full w-full",
+              // fallback: dim even if backdrop-filter is unsupported
+              "bg-black/60",
+              // when supported: slightly lighter dim + strong blur
+              "supports-[backdrop-filter]:bg-black/40 supports-[backdrop-filter]:backdrop-blur-xl",
+            ].join(" ")}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={overlayTransition}
           />
 
-          {/* click-outside zone */}
-          <div
-            className="absolute inset-0 px-4 sm:px-6"
-            onPointerDown={() => onClose()}
-          >
-            {/* popup window (stop outside click) */}
+          {/* window */}
+          <div className="absolute inset-0 px-4 sm:px-6">
             <motion.div
               role="dialog"
               aria-modal="true"
               aria-label={entry.title}
               className={[
-                "absolute left-0 right-0 mx-auto w-full max-w-[1040px]",
+                "absolute left-1/2 -translate-x-1/2",
+                "w-full max-w-[980px]",
                 "overflow-hidden rounded-3xl border border-white/10",
-                // fully opaque pane (no see-through)
-                "bg-black",
-                "shadow-[0_0_60px_rgba(0,0,0,0.72)]",
+                // solid, non-translucent pane background
+                "bg-neutral-950",
+                "shadow-[0_0_60px_rgba(0,0,0,0.75)]",
               ].join(" ")}
               style={{ top, bottom: 28 }}
               initial={
                 reduce
                   ? { opacity: 1, y: 0, scale: 1 }
-                  : { opacity: 0, y: 14, scale: 0.985 }
+                  : { opacity: 0, y: 18, scale: 0.985 }
               }
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={
                 reduce
                   ? { opacity: 1, y: 0, scale: 1 }
-                  : { opacity: 0, y: 14, scale: 0.985 }
+                  : { opacity: 0, y: 18, scale: 0.985 }
               }
               transition={panelTransition}
-              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
             >
-              {/* close button */}
+              {/* close */}
               <button
                 ref={closeBtnRef}
                 type="button"
@@ -144,8 +144,8 @@ export default function ProjectsPopup({
                 ✕
               </button>
 
-              {/* internal scroll only */}
-              <div className="h-full overflow-y-auto [overscroll-behavior:contain]">
+              {/* only this scrolls */}
+              <div className="h-full overflow-y-auto [overscroll-behavior:contain] [-webkit-overflow-scrolling:touch] touch-pan-y">
                 {/* image header */}
                 <div className="relative aspect-[16/10] w-full bg-neutral-900">
                   {entry.image ? (
@@ -153,7 +153,7 @@ export default function ProjectsPopup({
                       src={entry.image}
                       alt={entry.title}
                       fill
-                      sizes="(max-width: 768px) 100vw, 1040px"
+                      sizes="(max-width: 768px) 100vw, 980px"
                       className="object-cover"
                       priority
                     />
@@ -170,9 +170,7 @@ export default function ProjectsPopup({
                       {entry.kindLabel}
                     </span>
                     <span className="text-xs text-white/60">
-                      <time dateTime={entry.date}>
-                        {formatDateLocal(entry.date)}
-                      </time>
+                      <time dateTime={entry.date}>{formatDateLocal(entry.date)}</time>
                     </span>
                   </div>
 
