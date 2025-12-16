@@ -6,7 +6,7 @@ import Link from "next/link";
 
 export default function NowStatus() {
   return (
-    <section className="mt-10 w-full">
+    <section className="w-full">
       <div className="relative overflow-hidden rounded-2xl bg-neutral-950 shadow-[0_0_26px_rgba(0,0,0,0.45)] backdrop-blur-md">
         {/* smooth, organic wave background (no lines, no seam) */}
         <motion.div
@@ -75,12 +75,12 @@ export default function NowStatus() {
                 Based in Taipei →
               </p>
               <p className="mt-2 text-[1.1rem] leading-relaxed text-neutral-200 sm:text-[1.15rem]">
-                Messing around with AI, current Fulbright Scholar, seeking jobs in tech
-                and AI starting mid-2026.
+                Messing around with AI, current Fulbright Scholar, seeking jobs in
+                tech and AI starting mid-2026.
               </p>
             </div>
 
-            {/* contact (underline ONLY on text span; no double underline; arrow is ↗ only) */}
+            {/* contact (underline ONLY on text span; arrow is ↗ only) */}
             <Link
               href="/contact"
               aria-label="Go to contact page"
