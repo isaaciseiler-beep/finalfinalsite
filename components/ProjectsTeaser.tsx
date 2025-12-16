@@ -61,7 +61,7 @@ export default function ProjectsTeaser() {
 
   return (
     <section
-      className="relative min-w-0 bg-black overflow-hidden"
+      className="relative min-w-0 bg-black overflow-hidden rounded-3xl md:rounded-[2.5rem]"
       style={{ isolation: "isolate" }}
     >
       <Link
@@ -98,7 +98,7 @@ export default function ProjectsTeaser() {
 
         <motion.div
           aria-hidden
-          className="pointer-events-none absolute inset-y-0 inset-x-0 z-10"
+          className="pointer-events-none absolute inset-y-0 inset-x-0 z-10 rounded-3xl md:rounded-[2.5rem]"
           style={
             {
               background: "#fff",
@@ -165,3 +165,4 @@ export default function ProjectsTeaser() {
     </section>
   );
 }
+
