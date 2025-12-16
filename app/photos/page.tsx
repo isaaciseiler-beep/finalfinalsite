@@ -16,7 +16,7 @@ import {
   useScroll,
   useTransform,
 } from "framer-motion";
-import { Map as MapIcon, SlidersHorizontal } from "lucide-react";
+import { ArrowUp, Map as MapIcon, SlidersHorizontal } from "lucide-react";
 import Image from "next/image";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { createPortal } from "react-dom";
@@ -79,7 +79,16 @@ const BLUR_DATA_URL =
 const FLEX_SIZES =
   "(min-width: 1024px) calc(100vw - var(--sidebar-width, 0px)), 100vw";
 
-// ---------- small helpers (new) ----------
+const HALF_SIZES =
+  "(min-width: 1024px) calc((100vw - var(--sidebar-width, 0px)) / 2), 100vw";
+
+const THIRD_SIZES =
+  "(min-width: 1024px) calc((100vw - var(--sidebar-width, 0px)) / 3), 100vw";
+
+const TWO_THIRDS_SIZES =
+  "(min-width: 1024px) calc((100vw - var(--sidebar-width, 0px)) * 2 / 3), 100vw";
+
+// ---------- small helpers ----------
 
 function isHoldText(v: string | null | undefined) {
   const s = (v ?? "").trim().toLowerCase();
@@ -102,15 +111,11 @@ function isValidLatLng(lat: number, lng: number) {
 // r2 keys are case-sensitive; try common extensions before excluding a photo.
 const EXT_CANDIDATES = [".JPG", ".jpg", ".jpeg", ".JPEG"] as const;
 
-function hasRealLocation(p: Pick<PhotoMeta, "locationLabel">) {
-  return !isHoldText(p.locationLabel);
-}
-
 function buildR2Src(id: string, ext: (typeof EXT_CANDIDATES)[number]) {
   return `${R2_BASE_URL}/${id}${ext}`;
 }
 
-// ---------- overrides (unchanged) ----------
+// ---------- overrides ----------
 
 const photoOverrides: Record<string, Partial<PhotoMeta>> = {
   image_1: {
@@ -1060,6 +1065,7 @@ const photoOverrides: Record<string, Partial<PhotoMeta>> = {
   },
 };
 
+
 // Build the photo list from the highest index we know about.
 // We *exclude as few as possible* while guaranteeing:
 // - no blank photos (we retry common extensions on error)
@@ -1089,6 +1095,7 @@ const photos: PhotoMeta[] = Array.from({ length: MAX_INDEX }, (_, i) => {
 }).filter(Boolean) as PhotoMeta[];
 
 // ---------- helpers ----------
+
 const regionLabels: Record<Region, string> = {
   asia: "Asia",
   "north-america": "North America",
@@ -1112,14 +1119,14 @@ const subjectLabels: Record<Subject, string> = {
   random: "Random",
 };
 
-const layoutClasses: Record<LayoutVariant, string> = {
-  full: "col-span-12 md:col-span-12",
-  half: "col-span-12 md:col-span-6",
-  window: "col-span-12",
-};
+// ---------- layout planning ----------
 
-// indices that become window rows (0-based)
-const windowIndices = new Set<number>([5, 18, 31, 44, 57, 70, 83, 96, 109, 122]);
+// window indices (0-based by photo id number)
+// - doubled vs previous set
+const windowIndices = new Set<number>([
+  5, 11, 18, 24, 31, 37, 44, 50, 57, 63, 70, 76, 83, 89, 96, 102, 109, 115,
+  122, 128,
+]);
 
 function computeLayoutVariant(photo: PhotoMeta, index0: number): LayoutVariant {
   if (photo.layoutVariant) return photo.layoutVariant;
@@ -1127,7 +1134,11 @@ function computeLayoutVariant(photo: PhotoMeta, index0: number): LayoutVariant {
   return index0 % 3 === 0 ? "full" : "half";
 }
 
-// ---------- WINDOW (scroll-tied parallax + freeze + pill timing) ----------
+function isWindowPhoto(photo: PhotoMeta) {
+  return computeLayoutVariant(photo, getPhotoIndex0(photo.id)) === "window";
+}
+
+// ---------- WINDOW (scroll-tied parallax + bottom close + anchored pill) ----------
 
 function WindowFrame({
   photo,
@@ -1152,33 +1163,46 @@ function WindowFrame({
     offset: ["start end", "end start"],
   });
 
+  // window borders:
+  // - open: top+bottom retract until the photo is full-screen
+  // - hold: full-screen; parallax freezes
+  // - close: bottom border moves up (photo exits) — timed shorter to avoid "dead" gap
   const topInset = useTransform(scrollYProgress, [0, 0.22], ["22%", "0%"]);
   const bottomInset = useTransform(
     scrollYProgress,
-    [0, 0.22, 0.72, 1],
+    [0, 0.22, 0.85, 1],
     ["22%", "0%", "0%", "100%"],
   );
   const clipPath = useMotionTemplate`inset(${topInset} 0% ${bottomInset} 0%)`;
 
   const imageY = useTransform(
     scrollYProgress,
-    [0, 0.22, 0.72, 1],
+    [0, 0.22, 0.85, 1],
     ["-20%", "0%", "0%", "20%"],
   );
 
+  // location pill:
+  // - appears after open
+  // - stays during hold
+  // - as the bottom frame scrolls away, the pill lifts at the same rate (anchored to the bottom edge)
   const pillOpacity = useTransform(
     scrollYProgress,
-    [0, 0.22, 0.28, 0.60, 0.68, 1],
+    [0, 0.22, 0.28, 0.86, 0.94, 1],
     [0, 0, 1, 1, 0, 0],
   );
-  const pillY = useTransform(scrollYProgress, [0.22, 0.28, 0.60, 0.68], [10, 0, 0, 10]);
+
+  const pillY = useTransform(
+    scrollYProgress,
+    [0.22, 0.28, 0.85, 1],
+    ["12px", "0px", "0px", "-100vh"],
+  );
 
   const isPriority = index0 < 14 || windowIndices.has(index0);
   const showLocation = !isHoldText(photo.locationLabel);
 
   return (
-    <div className="col-span-12" id={`photo-${photo.id}`}>
-      <div ref={sectionRef} className="relative h-[220vh] md:h-[240vh]">
+    <div id={`photo-${photo.id}`}>
+      <div ref={sectionRef} className="relative h-[210vh] md:h-[220vh]">
         <div className="sticky top-0 h-dvh bg-black overflow-hidden">
           <motion.div
             style={{ clipPath }}
@@ -1227,20 +1251,26 @@ function WindowFrame({
   );
 }
 
-// ---------- GRID CARD (faster perceived load + more elegant appear) ----------
+// ---------- GENERIC CARD (used by non-window layouts) ----------
 
-function GridPhotoCard({
+function PhotoCard({
   photo,
   index0,
+  className,
   onImageError,
+  aspectClass = "aspect-[16/9]",
+  sizes = FLEX_SIZES,
 }: {
   photo: PhotoMeta;
   index0: number;
+  className: string;
   onImageError: (id: string) => void;
+  aspectClass?: string;
+  sizes?: string;
 }) {
-  const gridClass = layoutClasses[computeLayoutVariant(photo, index0)];
   const isPriority = index0 < 14 || windowIndices.has(index0);
   const showLocation = !isHoldText(photo.locationLabel);
+
   const [src, setSrc] = useState(() => buildR2Src(photo.id, EXT_CANDIDATES[0]));
   const extIdxRef = useRef(0);
 
@@ -1252,14 +1282,19 @@ function GridPhotoCard({
   return (
     <motion.div
       id={`photo-${photo.id}`}
-      className={gridClass}
+      className={className}
       initial={{ opacity: 0, y: 18, scale: 0.992, filter: "blur(6px)" }}
       whileInView={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
       viewport={{ once: false, amount: 0.35, margin: "0px 0px -10% 0px" }}
       transition={{ duration: 0.55, ease: [0.22, 0.61, 0.36, 1] }}
     >
       <div className="w-full">
-        <div className="relative aspect-[16/9] overflow-hidden rounded-3xl bg-black">
+        <div
+          className={[
+            "relative overflow-hidden rounded-3xl bg-black",
+            aspectClass,
+          ].join(" ")}
+        >
           <Image
             src={src}
             alt={photo.alt}
@@ -1267,11 +1302,7 @@ function GridPhotoCard({
             placeholder="blur"
             blurDataURL={BLUR_DATA_URL}
             fill
-            sizes={
-              computeLayoutVariant(photo, index0) === "full"
-                ? FLEX_SIZES
-                : "(min-width:1024px) 50vw, 100vw"
-            }
+            sizes={sizes}
             quality={80}
             className="h-full w-full object-cover"
             onError={() => {
@@ -1284,6 +1315,7 @@ function GridPhotoCard({
               onImageError(photo.id);
             }}
           />
+
           {showLocation && (
             <div className="pointer-events-none absolute inset-x-3 bottom-3 flex justify-end">
               <div className="rounded-full bg-black/70 px-4 py-1.5 text-sm font-medium text-white/90 shadow-sm backdrop-blur-md">
@@ -1717,7 +1749,7 @@ function FiltersPanel({ state, onChange, onReset }: FiltersPanelProps) {
   );
 }
 
-// ---------- LIQUID-GLASS PILL (fixed dock + anchored popup) ----------
+// ---------- LIQUID-GLASS PILL (fixed dock + anchored popup + footer-avoid) ----------
 
 type BubbleMode = "map" | "filters" | null;
 
@@ -1738,10 +1770,60 @@ function FloatingControls({
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<BubbleMode>(null);
 
+  const [showToTop, setShowToTop] = useState(false);
+  const [footerLift, setFooterLift] = useState(0);
+
   const pressTimerRef = useRef<number | null>(null);
   const longPressFiredRef = useRef(false);
 
   useEffect(() => setMounted(true), []);
+
+  const { scrollY } = useScroll();
+
+  useEffect(() => {
+    if (!mounted) return;
+    const unsub = scrollY.on("change", (v) => {
+      setShowToTop(v > 520);
+    });
+    return () => unsub();
+  }, [scrollY, mounted]);
+
+  // prevent dock + center button from overlapping the footer
+  useEffect(() => {
+    if (!mounted) return;
+
+    const footer =
+      (document.querySelector("footer") as HTMLElement | null) ||
+      (document.getElementById("footer") as HTMLElement | null);
+
+    if (!footer) return;
+
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      const rect = footer.getBoundingClientRect();
+      const overlap = window.innerHeight - rect.top;
+      const lift = overlap > 0 ? Math.ceil(overlap + 16) : 0;
+      setFooterLift(lift);
+    };
+
+    const on = () => {
+      if (raf) return;
+      raf = window.requestAnimationFrame(update);
+    };
+
+    on();
+    window.addEventListener("scroll", on, { passive: true });
+    window.addEventListener("resize", on);
+    window.addEventListener("orientationchange", on);
+
+    return () => {
+      if (raf) window.cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", on);
+      window.removeEventListener("resize", on);
+      window.removeEventListener("orientationchange", on);
+    };
+  }, [mounted]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -1841,7 +1923,34 @@ function FloatingControls({
         )}
       </AnimatePresence>
 
-      <div className="fixed bottom-5 right-3 z-[200] md:bottom-7 md:right-6">
+      {/* scroll-to-top (bottom center) */}
+      <AnimatePresence>
+        {!open && showToTop && (
+          <motion.button
+            type="button"
+            aria-label="scroll to top"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            className="fixed left-1/2 z-[200] -translate-x-1/2"
+            style={{ bottom: "1.25rem" }}
+            initial={{ opacity: 0, y: 10, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.96 }}
+            transition={{ duration: 0.18, ease: [0.22, 0.61, 0.36, 1] }}
+          >
+            <motion.div style={{ y: footerLift ? -footerLift : 0 }}>
+              <div className="h-9 w-9 rounded-full bg-black/35 backdrop-blur-md shadow-[0_10px_28px_rgba(0,0,0,0.70)] flex items-center justify-center">
+                <ArrowUp className="h-4 w-4 text-neutral-200" />
+              </div>
+            </motion.div>
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      {/* map/filter pill (bottom right) */}
+      <motion.div
+        className="fixed bottom-5 right-3 z-[200] md:bottom-7 md:right-6"
+        style={{ y: footerLift ? -footerLift : 0 }}
+      >
         <div className="relative">
           <motion.div
             className="absolute right-0 bottom-[3.25rem] z-[10] w-[min(780px,96vw)]"
@@ -1937,7 +2046,7 @@ function FloatingControls({
                   : "text-neutral-200 hover:bg-white/10",
               ].join(" ")}
             >
-              <MapIcon className="h-4 w-4 drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]" />
+              <MapIcon className="h-4 w-4" />
             </button>
 
             <div className="h-5 w-px bg-white/25" />
@@ -1962,17 +2071,34 @@ function FloatingControls({
                     : "text-neutral-200 hover:bg-white/10",
               ].join(" ")}
             >
-              <SlidersHorizontal className="h-3.5 w-3.5 drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]" />
+              <SlidersHorizontal className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
-      </div>
+      </motion.div>
     </>,
     document.body,
   );
 }
 
 // ---------- PAGE ----------
+
+type Section =
+  | { kind: "window"; photo: PhotoMeta; index0: number }
+  | { kind: "full"; photo: PhotoMeta; index0: number }
+  | { kind: "row2"; photos: [PhotoMeta, PhotoMeta]; index0s: [number, number] }
+  | {
+      kind: "L";
+      orientation: "left" | "right";
+      photos: [PhotoMeta, PhotoMeta, PhotoMeta];
+      index0s: [number, number, number];
+    }
+  | {
+      kind: "offset";
+      side: "left" | "right";
+      photo: PhotoMeta;
+      index0: number;
+    };
 
 export default function PhotosPage() {
   const [filterState, setFilterState] = useState<FilterState>({
@@ -2021,35 +2147,313 @@ export default function PhotosPage() {
     });
   }, []);
 
+  // --- preserve scroll position when sidebar expands/retracts (layout width changes) ---
+  const layoutWidthRef = useRef<HTMLDivElement | null>(null);
+  const anchorRef = useRef<{ id: string; top: number } | null>(null);
+  const adjustingRef = useRef(false);
+
+  useEffect(() => {
+    const pickAnchor = () => {
+      if (adjustingRef.current) return;
+
+      const x = Math.max(24, Math.min(window.innerWidth - 24, window.innerWidth / 2));
+      const y = 140; // below header
+      let el = document.elementFromPoint(x, y) as HTMLElement | null;
+
+      while (el && el !== document.body) {
+        if (el.id && el.id.startsWith("photo-")) break;
+        el = el.parentElement;
+      }
+
+      if (el && el.id && el.id.startsWith("photo-")) {
+        anchorRef.current = { id: el.id, top: el.getBoundingClientRect().top };
+      }
+    };
+
+    pickAnchor();
+    window.addEventListener("scroll", pickAnchor, { passive: true });
+    window.addEventListener("resize", pickAnchor);
+    return () => {
+      window.removeEventListener("scroll", pickAnchor);
+      window.removeEventListener("resize", pickAnchor);
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    const el = layoutWidthRef.current;
+    if (!el) return;
+    if (typeof ResizeObserver === "undefined") return;
+
+    let lastW = el.getBoundingClientRect().width;
+    let raf = 0;
+
+    const ro = new ResizeObserver(() => {
+      const nextW = el.getBoundingClientRect().width;
+      if (Math.abs(nextW - lastW) < 2) return;
+
+      const anchor = anchorRef.current;
+      lastW = nextW;
+      if (!anchor) return;
+
+      if (raf) window.cancelAnimationFrame(raf);
+      raf = window.requestAnimationFrame(() => {
+        const target = document.getElementById(anchor.id);
+        if (!target) return;
+
+        const nextTop = target.getBoundingClientRect().top;
+        const delta = nextTop - anchor.top;
+
+        if (Math.abs(delta) < 1) return;
+
+        adjustingRef.current = true;
+        window.scrollBy({ top: delta, left: 0 });
+
+        window.requestAnimationFrame(() => {
+          adjustingRef.current = false;
+          const refreshed = document.getElementById(anchor.id);
+          if (refreshed) {
+            anchorRef.current = {
+              id: anchor.id,
+              top: refreshed.getBoundingClientRect().top,
+            };
+          }
+        });
+      });
+    });
+
+    ro.observe(el);
+    return () => {
+      if (raf) window.cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, []);
+
+  // --- build sections (no 2x2 grids, +25% more L groups, +6 offset 70% blocks) ---
+  const sections: Section[] = useMemo(() => {
+    const list = filteredPhotos;
+    const nonWindow = list.filter((p) => !isWindowPhoto(p));
+
+    // pick exactly 6 "70%" offset photos (evenly spaced across the non-window list)
+    const offsetCount = Math.min(6, nonWindow.length);
+    const offsetIds = new Set<string>();
+    for (let k = 0; k < offsetCount; k++) {
+      const idx = Math.floor(((k + 1) * nonWindow.length) / (offsetCount + 1));
+      const p = nonWindow[Math.min(nonWindow.length - 1, Math.max(0, idx))];
+      offsetIds.add(p.id);
+    }
+
+    const out: Section[] = [];
+    let i = 0;
+    let sectionIdx = 0;
+    let lastWasRow2 = false;
+    let offsetSide: "left" | "right" = "left";
+    let lOrient: "left" | "right" = "left";
+
+    const canUse = (p: PhotoMeta | undefined) => {
+      if (!p) return false;
+      if (isWindowPhoto(p)) return false;
+      if (offsetIds.has(p.id)) return false;
+      return true;
+    };
+
+    while (i < list.length) {
+      const p0 = list[i];
+      const index0 = getPhotoIndex0(p0.id);
+
+      if (isWindowPhoto(p0)) {
+        out.push({ kind: "window", photo: p0, index0 });
+        i += 1;
+        lastWasRow2 = false;
+        continue;
+      }
+
+      if (offsetIds.has(p0.id)) {
+        out.push({ kind: "offset", side: offsetSide, photo: p0, index0 });
+        offsetSide = offsetSide === "left" ? "right" : "left";
+        i += 1;
+        lastWasRow2 = false;
+        sectionIdx += 1;
+        continue;
+      }
+
+      const p1 = list[i + 1];
+      const p2 = list[i + 2];
+
+      const canL = canUse(p0) && canUse(p1) && canUse(p2);
+      const canRow2 = canUse(p0) && canUse(p1);
+
+      // bias toward L groups (≈25%+ more three-photo formations)
+      const shouldL = canL && (sectionIdx % 4 === 1 || sectionIdx % 6 === 0);
+
+      if (shouldL && p1 && p2) {
+        out.push({
+          kind: "L",
+          orientation: lOrient,
+          photos: [p0, p1, p2],
+          index0s: [index0, getPhotoIndex0(p1.id), getPhotoIndex0(p2.id)],
+        });
+        lOrient = lOrient === "left" ? "right" : "left";
+        i += 3;
+        lastWasRow2 = false;
+        sectionIdx += 1;
+        continue;
+      }
+
+      if (canRow2 && !lastWasRow2 && p1) {
+        out.push({
+          kind: "row2",
+          photos: [p0, p1],
+          index0s: [index0, getPhotoIndex0(p1.id)],
+        });
+        i += 2;
+        lastWasRow2 = true;
+        sectionIdx += 1;
+        continue;
+      }
+
+      out.push({ kind: "full", photo: p0, index0 });
+      i += 1;
+      lastWasRow2 = false;
+      sectionIdx += 1;
+    }
+
+    return out;
+  }, [filteredPhotos]);
+
   return (
     <>
       <Container>
-        {/* match experience page scaffold so the first photo aligns with edu/about baseline */}
         <div className="-mx-4 sm:-mx-6 overflow-x-hidden">
-          <div className="px-4 sm:px-6 pt-[112px] md:pt-[112px] pb-10">
+          <div
+            ref={layoutWidthRef}
+            className="px-4 sm:px-6 pt-[112px] md:pt-[112px] pb-10"
+            style={{ overflowAnchor: "none" }}
+          >
             <div className="relative overflow-visible">
-              <div className="grid grid-cols-12 gap-6 md:gap-10">
-                {filteredPhotos.map((photo) => {
-                  const index0 = getPhotoIndex0(photo.id);
-                  const variant = computeLayoutVariant(photo, index0);
-
-                  return variant === "window" ? (
-                    <WindowFrame
-                      key={photo.id}
-                      photo={photo}
-                      index0={index0}
-                      onImageError={reportBroken}
-                    />
-                  ) : (
-                    <GridPhotoCard
-                      key={photo.id}
-                      photo={photo}
-                      index0={index0}
-                      onImageError={reportBroken}
-                    />
+              {sections.map((s, idx) => {
+                const gap = idx === 0 ? "" : "mt-12 md:mt-20"; // doubled spacing between sections
+                if (s.kind === "window") {
+                  return (
+                    <div key={`window-${s.photo.id}`} className={gap}>
+                      <WindowFrame
+                        photo={s.photo}
+                        index0={s.index0}
+                        onImageError={reportBroken}
+                      />
+                    </div>
                   );
-                })}
-              </div>
+                }
+
+                if (s.kind === "L") {
+                  const [a, b, c] = s.photos;
+                  const [ia, ib, ic] = s.index0s;
+                  const isLeft = s.orientation === "left";
+
+                  return (
+                    <div key={`L-${a.id}-${b.id}-${c.id}`} className={gap}>
+                      <div className="grid grid-cols-12 gap-6 md:gap-10 md:grid-rows-2">
+                        <PhotoCard
+                          photo={a}
+                          index0={ia}
+                          onImageError={reportBroken}
+                          sizes={TWO_THIRDS_SIZES}
+                          aspectClass="aspect-[16/9] md:aspect-auto md:h-full"
+                          className={[
+                            "col-span-12",
+                            isLeft
+                              ? "md:col-span-8 md:row-span-2"
+                              : "md:col-span-8 md:col-start-5 md:row-span-2",
+                          ].join(" ")}
+                        />
+
+                        <PhotoCard
+                          photo={b}
+                          index0={ib}
+                          onImageError={reportBroken}
+                          sizes={THIRD_SIZES}
+                          className={[
+                            "col-span-12 md:col-span-4",
+                            isLeft ? "md:row-start-1" : "md:col-start-1 md:row-start-1",
+                          ].join(" ")}
+                        />
+
+                        <PhotoCard
+                          photo={c}
+                          index0={ic}
+                          onImageError={reportBroken}
+                          sizes={THIRD_SIZES}
+                          className={[
+                            "col-span-12 md:col-span-4",
+                            isLeft ? "md:row-start-2" : "md:col-start-1 md:row-start-2",
+                          ].join(" ")}
+                        />
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (s.kind === "row2") {
+                  const [a, b] = s.photos;
+                  const [ia, ib] = s.index0s;
+                  return (
+                    <div key={`row2-${a.id}-${b.id}`} className={gap}>
+                      <div className="grid grid-cols-12 gap-6 md:gap-10">
+                        <PhotoCard
+                          photo={a}
+                          index0={ia}
+                          onImageError={reportBroken}
+                          sizes={HALF_SIZES}
+                          className="col-span-12 md:col-span-6"
+                        />
+                        <PhotoCard
+                          photo={b}
+                          index0={ib}
+                          onImageError={reportBroken}
+                          sizes={HALF_SIZES}
+                          className="col-span-12 md:col-span-6"
+                        />
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (s.kind === "offset") {
+                  return (
+                    <div key={`offset-${s.photo.id}`} className={gap}>
+                      <div className="grid grid-cols-12 gap-6 md:gap-10">
+                        <PhotoCard
+                          photo={s.photo}
+                          index0={s.index0}
+                          onImageError={reportBroken}
+                          sizes={TWO_THIRDS_SIZES}
+                          className={[
+                            "col-span-12 md:col-span-8",
+                            s.side === "left" ? "md:col-start-1" : "md:col-start-5",
+                          ].join(" ")}
+                        />
+                      </div>
+                    </div>
+                  );
+                }
+
+                // full
+                return (
+                  <div key={`full-${s.photo.id}`} className={gap}>
+                    <div className="grid grid-cols-12 gap-6 md:gap-10">
+                      <PhotoCard
+                        photo={s.photo}
+                        index0={s.index0}
+                        onImageError={reportBroken}
+                        sizes={FLEX_SIZES}
+                        className="col-span-12"
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* tail spacer: ensures the final window section can complete its bottom scroll-away */}
+              <div aria-hidden className="h-[22vh]" />
             </div>
           </div>
         </div>
@@ -2064,4 +2468,3 @@ export default function PhotosPage() {
     </>
   );
 }
-
