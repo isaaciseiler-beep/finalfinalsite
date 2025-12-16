@@ -8,7 +8,7 @@ function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
-type BlobTileProps = {
+type TileProps = {
   label: string;
   href: string;
   blobColor: string;
@@ -16,33 +16,57 @@ type BlobTileProps = {
   external?: boolean;
 };
 
-function BlobTile({ label, href, blobColor, hoverTextClassName, external }: BlobTileProps) {
+function BlobTile({ label, href, blobColor, hoverTextClassName, external }: TileProps) {
   const ref = React.useRef<HTMLAnchorElement | null>(null);
   const raf = React.useRef<number | null>(null);
 
-  const last = React.useRef({
-    mx: 0,
-    my: 0,
-    hx: 0,
-    hy: 0,
-    rx: 0,
-    ry: 0,
-  });
+  const target = React.useRef({ mx: 0, my: 0, rx: 0, ry: 0 });
+  const current = React.useRef({ mx: 0, my: 0, rx: 0, ry: 0 });
 
-  const applyVars = React.useCallback(() => {
+  const tick = React.useCallback(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el) {
+      raf.current = null;
+      return;
+    }
 
-    const { mx, my, hx, hy, rx, ry } = last.current;
-    el.style.setProperty("--mx", `${mx.toFixed(2)}px`);
-    el.style.setProperty("--my", `${my.toFixed(2)}px`);
+    const t = target.current;
+    const c = current.current;
+
+    // spring-ish smoothing (higher = snappier)
+    const s = 0.16;
+
+    c.mx += (t.mx - c.mx) * s;
+    c.my += (t.my - c.my) * s;
+    c.rx += (t.rx - c.rx) * s;
+    c.ry += (t.ry - c.ry) * s;
+
+    const hx = c.mx * 1.4;
+    const hy = c.my * 1.4;
+
+    el.style.setProperty("--mx", `${c.mx.toFixed(2)}px`);
+    el.style.setProperty("--my", `${c.my.toFixed(2)}px`);
     el.style.setProperty("--hx", `${hx.toFixed(2)}px`);
     el.style.setProperty("--hy", `${hy.toFixed(2)}px`);
-    el.style.setProperty("--rx", `${rx.toFixed(2)}deg`);
-    el.style.setProperty("--ry", `${ry.toFixed(2)}deg`);
+    el.style.setProperty("--rx", `${c.rx.toFixed(2)}deg`);
+    el.style.setProperty("--ry", `${c.ry.toFixed(2)}deg`);
 
-    raf.current = null;
+    const done =
+      Math.abs(t.mx - c.mx) < 0.02 &&
+      Math.abs(t.my - c.my) < 0.02 &&
+      Math.abs(t.rx - c.rx) < 0.02 &&
+      Math.abs(t.ry - c.ry) < 0.02;
+
+    if (!done) {
+      raf.current = window.requestAnimationFrame(tick);
+    } else {
+      raf.current = null;
+    }
   }, []);
+
+  const kick = React.useCallback(() => {
+    if (raf.current == null) raf.current = window.requestAnimationFrame(tick);
+  }, [tick]);
 
   const onPointerMove = React.useCallback(
     (e: React.PointerEvent<HTMLAnchorElement>) => {
@@ -56,24 +80,22 @@ function BlobTile({ label, href, blobColor, hoverTextClassName, external }: Blob
       const mx = clamp(px, -1, 1) * 16;
       const my = clamp(py, -1, 1) * 16;
 
-      last.current = {
+      target.current = {
         mx,
         my,
-        hx: mx * 1.6,
-        hy: my * 1.6,
-        rx: clamp(py, -1, 1) * -6,
-        ry: clamp(px, -1, 1) * 6,
+        rx: clamp(py, -1, 1) * -7,
+        ry: clamp(px, -1, 1) * 7,
       };
 
-      if (raf.current == null) raf.current = window.requestAnimationFrame(applyVars);
+      kick();
     },
-    [applyVars]
+    [kick]
   );
 
   const onPointerLeave = React.useCallback(() => {
-    last.current = { mx: 0, my: 0, hx: 0, hy: 0, rx: 0, ry: 0 };
-    if (raf.current == null) raf.current = window.requestAnimationFrame(applyVars);
-  }, [applyVars]);
+    target.current = { mx: 0, my: 0, rx: 0, ry: 0 };
+    kick();
+  }, [kick]);
 
   React.useEffect(() => {
     return () => {
@@ -104,10 +126,10 @@ function BlobTile({ label, href, blobColor, hoverTextClassName, external }: Blob
         </span>
       </span>
 
-      <div className="relative z-[2] flex h-full w-full items-center justify-center">
+      <div className="relative z-[2] grid h-full w-full place-items-center">
         <div
           className={
-            "text-[clamp(44px,7vw,88px)] font-normal leading-none tracking-tight text-black transition-colors duration-300 " +
+            "text-[clamp(44px,7vw,88px)] font-normal leading-none tracking-tight text-neutral-50 transition-colors duration-300 " +
             hoverTextClassName
           }
         >
@@ -125,6 +147,7 @@ export default function Contact() {
         <div className="flex h-full flex-col px-4 sm:px-6 pt-[112px] md:pt-[112px]">
           <div className="min-h-0 flex-1">
             <div className="flex h-full flex-col justify-between gap-4 md:flex-row md:gap-6">
+              {/* top-anchored */}
               <div className="flex items-start justify-center md:flex-1">
                 <BlobTile
                   label="Connect"
@@ -135,6 +158,7 @@ export default function Contact() {
                 />
               </div>
 
+              {/* bottom-anchored */}
               <div className="flex items-end justify-center md:flex-1">
                 <BlobTile
                   label="Email"
@@ -150,3 +174,4 @@ export default function Contact() {
     </main>
   );
 }
+
