@@ -4,13 +4,11 @@
 import * as React from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Github, Star, ExternalLink } from "lucide-react";
+import { Github, Sparkles, Star } from "lucide-react";
 
 type Props = {
   repoUrl: string;
-  branch?: string;
   stars?: number;
-  footerSelector?: string;
 };
 
 const fade = { duration: 0.22, ease: [0.2, 0.8, 0.2, 1] };
@@ -28,8 +26,18 @@ const item = {
   },
 };
 
-export default function GitWidget({ repoUrl, branch = "main", stars }: Props) {
+type CommitActivityWeek = {
+  total: number;
+  week: number; // unix timestamp (seconds)
+  days: number[]; // 7 values, Sun..Sat
+};
+
+export default function GitWidget({ repoUrl, stars }: Props) {
   const [open, setOpen] = React.useState(false);
+
+  const [repoStars, setRepoStars] = React.useState<number | undefined>(stars);
+  const [weeks, setWeeks] = React.useState<CommitActivityWeek[] | null>(null);
+  const [loading, setLoading] = React.useState(false);
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
@@ -37,10 +45,69 @@ export default function GitWidget({ repoUrl, branch = "main", stars }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const label = "text-[11px] uppercase tracking-wide text-neutral-300";
-  const value = "text-base sm:text-lg font-medium leading-tight text-neutral-100";
+  React.useEffect(() => {
+    // avoid network work until the sheet is opened
+    if (!open) return;
+
+    const { owner, repo } = parseOwnerRepo(repoUrl);
+    if (!owner || !repo) return;
+
+    let cancelled = false;
+    let tries = 0;
+    setLoading(true);
+
+    const fetchRepo = async () => {
+      try {
+        const res = await fetch(`https://api.github.com/repos/${owner}/${repo}`);
+        if (!res.ok) return;
+        const json = (await res.json()) as { stargazers_count?: number };
+        if (!cancelled && typeof json?.stargazers_count === "number") {
+          setRepoStars(json.stargazers_count);
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    const fetchCommitActivity = async () => {
+      try {
+        const res = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/stats/commit_activity`
+        );
+
+        // GitHub may return 202 while computing the stats.
+        if (res.status === 202 && tries < 6) {
+          tries += 1;
+          setTimeout(fetchCommitActivity, 450);
+          return;
+        }
+
+        if (!res.ok) {
+          if (!cancelled) setWeeks([]);
+          return;
+        }
+
+        const json = (await res.json()) as CommitActivityWeek[];
+        if (!cancelled) setWeeks(Array.isArray(json) ? json : []);
+      } catch {
+        if (!cancelled) setWeeks([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    fetchRepo();
+    fetchCommitActivity();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, repoUrl]);
+
+  const label = "text-sm font-medium text-neutral-900/75";
+  const value = "text-base sm:text-lg font-semibold leading-snug text-neutral-950";
   const pill =
-    "rounded-xl bg-neutral-900/70 px-3 py-2 text-xs text-neutral-100 hover:bg-neutral-900/85";
+    "inline-flex items-center justify-center rounded-full bg-black/20 px-4 py-2 text-sm font-medium text-neutral-950 hover:bg-black/25";
 
   return (
     <div className="relative">
@@ -68,150 +135,63 @@ export default function GitWidget({ repoUrl, branch = "main", stars }: Props) {
             />
 
             <motion.div
-              className="fixed inset-x-0 bottom-0 z-[61] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:px-6 sm:pb-[calc(env(safe-area-inset-bottom)+1.25rem)]"
+              className="fixed inset-x-0 bottom-0 z-[61] px-3 sm:px-6"
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 14 }}
               transition={pop}
             >
-              <div className="mx-auto w-full max-w-4xl">
-                {/* rounded card popup — no gradient overlay, background color unchanged */}
-                <div className="relative overflow-hidden rounded-2xl bg-neutral-950/85 backdrop-blur-md ring-1 ring-white/10 shadow-[0_18px_45px_rgba(0,0,0,0.45)]">
+              <div className="mx-auto w-full max-w-none">
+                {/* bottom sheet (top corners only) */}
+                <div className="relative overflow-hidden rounded-t-3xl bg-[#aa96af] shadow-[0_18px_45px_rgba(0,0,0,0.35)]">
                   {/* header */}
-                  <div className="relative flex items-center justify-between px-6 sm:px-8 pt-6 pb-4">
-                    <Github className="h-5 w-5 text-neutral-100 opacity-90" />
+                  <div className="relative flex items-center justify-between px-5 sm:px-6 pt-5 pb-4">
+                    <Github className="h-5 w-5 text-neutral-950/90" />
                     <Link
                       href={repoUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-neutral-100 underline-offset-2 hover:underline"
+                      className={pill}
                     >
-                      open repo <ExternalLink className="h-3.5 w-3.5" />
+                      Open Repository
                     </Link>
                   </div>
 
                   {/* content */}
                   <motion.div
-                    className="relative px-6 sm:px-8 pb-4 sm:pb-6"
+                    className="relative px-5 sm:px-6 pb-[calc(env(safe-area-inset-bottom)+1rem)]"
                     variants={list}
                     initial="hidden"
                     animate="show"
                   >
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       {/* repo */}
-                      <motion.div
-                        variants={item}
-                        className="rounded-2xl ring-1 ring-white/10 bg-neutral-900/60 p-4"
-                      >
-                        <div className={label}>repository</div>
-                        <div className={`${value} mt-1 break-words`}>
-                          {prettyRepo(repoUrl)}
-                        </div>
-                        <div className="mt-3 flex flex-wrap gap-3">
-                          <Link
-                            href={`${repoUrl}/tree/${encodeURIComponent(branch)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={pill}
-                          >
-                            view branch
-                          </Link>
-                          <Link
-                            href={`${repoUrl}/commits/${encodeURIComponent(branch)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={pill}
-                          >
-                            commits
-                          </Link>
-                        </div>
-                      </motion.div>
-
-                      {/* branch */}
-                      <motion.div
-                        variants={item}
-                        className="rounded-2xl ring-1 ring-white/10 bg-neutral-900/60 p-4"
-                      >
-                        <div className={label}>branch</div>
-                        <div className={`${value} mt-1`}>{branch}</div>
-                        <div className="mt-3">
-                          <Link
-                            href={`${repoUrl}/compare/${encodeURIComponent(
-                              branch
-                            )}...main`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={pill}
-                          >
-                            compare to main
-                          </Link>
+                      <motion.div variants={item} className="rounded-2xl bg-white/35 p-4">
+                        <div className={label}>Repository</div>
+                        <div className={`${value} mt-2 break-words`}>
+                          {prettyRepo(repoUrl) || "isaaciseiler-beep / finalfinalsite"}
                         </div>
                       </motion.div>
 
                       {/* engagement */}
-                      <motion.div
-                        variants={item}
-                        className="rounded-2xl ring-1 ring-white/10 bg-neutral-900/60 p-4"
-                      >
-                        <div className={label}>engagement</div>
-                        <div className="mt-1 flex items-center gap-2">
-                          <Star className="h-4 w-4 fill-current text-neutral-100" />
+                      <motion.div variants={item} className="rounded-2xl bg-white/35 p-4">
+                        <div className={label}>Stars</div>
+                        <div className="mt-2 flex items-center gap-2">
+                          <Star className="h-4 w-4 fill-current text-neutral-950/90" />
                           <span className={value}>
-                            {typeof stars === "number" ? stars.toLocaleString() : "—"}
+                            {typeof repoStars === "number" ? repoStars.toLocaleString() : "—"}
                           </span>
-                          <span className="ml-2 text-xs text-neutral-300">stars</span>
-                        </div>
-                        <div className="mt-3 flex flex-wrap gap-3">
-                          <Link
-                            href={`${repoUrl}/stargazers`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={pill}
-                          >
-                            stargazers
-                          </Link>
-                          <Link
-                            href={`${repoUrl}/issues`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={pill}
-                          >
-                            issues
-                          </Link>
-                          <Link
-                            href={`${repoUrl}/pulls`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={pill}
-                          >
-                            pull requests
-                          </Link>
                         </div>
                       </motion.div>
 
-                      {/* credits & inspirations */}
+                      {/* commit grid */}
                       <motion.div
                         variants={item}
-                        className="rounded-2xl ring-1 ring-white/10 bg-neutral-900/60 p-4"
+                        className="rounded-2xl bg-white/35 p-4 sm:col-span-2"
                       >
-                        <div className={label}>credits & inspirations</div>
-                        <div className="mt-3 flex flex-wrap gap-3">
-                          <Link
-                            href="https://osmo.supply"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={pill}
-                          >
-                            osmo.supply
-                          </Link>
-                          <Link
-                            href="https://openai.com"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={pill}
-                          >
-                            openai.com
-                          </Link>
+                        <div className={label}>Commits</div>
+                        <div className="mt-3">
+                          <CommitGrid weeks={weeks} loading={loading} />
                         </div>
                       </motion.div>
                     </div>
@@ -219,28 +199,22 @@ export default function GitWidget({ repoUrl, branch = "main", stars }: Props) {
                     {/* footer line */}
                     <motion.div
                       variants={item}
-                      className="mt-6 mb-2 flex items-center justify-center gap-4 text-[12px] text-neutral-300"
+                      className="mt-5 flex items-center justify-center gap-4 text-sm text-neutral-950/80"
                     >
                       <span className="inline-flex items-center gap-2">
-                        <img
-                          src="https://cdn.simpleicons.org/openai/ffffff"
-                          alt="OpenAI"
-                          width={16}
-                          height={16}
-                          className="opacity-90"
-                        />
-                        <span>Built with GPT-5</span>
+                        <Sparkles className="h-4 w-4 text-neutral-950/90" />
+                        <span>Built with GPT 5, GPT 5.1, and GPT 5.2</span>
                       </span>
                       <span className="opacity-50">•</span>
                       <span className="inline-flex items-center gap-2">
                         <img
-                          src="https://cdn.simpleicons.org/vercel/ffffff"
+                          src="https://cdn.simpleicons.org/vercel/000000"
                           alt="Vercel"
                           width={14}
                           height={14}
-                          className="opacity-90"
+                          className="opacity-80"
                         />
-                        <span>Launched with Vercel.</span>
+                        <span>Launched with Vercel</span>
                       </span>
                     </motion.div>
                   </motion.div>
@@ -265,3 +239,103 @@ function prettyRepo(url: string) {
   }
 }
 
+function parseOwnerRepo(url: string) {
+  try {
+    const u = new URL(url);
+    const parts = u.pathname.replace(/^\//, "").split("/");
+    const owner = parts?.[0];
+    const repo = parts?.[1];
+    return { owner, repo };
+  } catch {
+    return { owner: "", repo: "" };
+  }
+}
+
+function CommitGrid({
+  weeks,
+  loading,
+}: {
+  weeks: CommitActivityWeek[] | null;
+  loading: boolean;
+}) {
+  if (loading && !weeks) {
+    return <div className="text-sm text-neutral-950/70">Loading…</div>;
+  }
+
+  if (!weeks || weeks.length === 0) {
+    return (
+      <div className="text-sm text-neutral-950/70">
+        {loading ? "Loading…" : "No activity available"}
+      </div>
+    );
+  }
+
+  // GitHub returns weekly buckets with day arrays (Sun..Sat)
+  const allDays = weeks.flatMap((w) => w.days);
+  const max = Math.max(0, ...allDays);
+
+  const level = (c: number) => {
+    if (c <= 0) return 0;
+    if (max <= 1) return 1;
+    const r = c / max;
+    if (r <= 0.25) return 1;
+    if (r <= 0.5) return 2;
+    if (r <= 0.75) return 3;
+    return 4;
+  };
+
+  const cellBg = (lvl: number) => {
+    switch (lvl) {
+      case 0:
+        return "bg-black/10";
+      case 1:
+        return "bg-black/20";
+      case 2:
+        return "bg-black/30";
+      case 3:
+        return "bg-black/45";
+      default:
+        return "bg-black/60";
+    }
+  };
+
+  // build day rows (Sun..Sat), each row is week columns
+  const rows = Array.from({ length: 7 }, (_, dayIdx) =>
+    weeks.map((w) => w.days?.[dayIdx] ?? 0)
+  );
+
+  return (
+    <div className="max-w-full overflow-x-auto">
+      <div className="inline-flex flex-col gap-[3px]">
+        {rows.map((row, rowIdx) => (
+          <div key={rowIdx} className="inline-flex gap-[3px]">
+            {row.map((count, colIdx) => {
+              const w = weeks[colIdx];
+              const ts = (w?.week ?? 0) + rowIdx * 86400;
+              const d = new Date(ts * 1000);
+              const dateLabel = Number.isFinite(d.getTime())
+                ? d.toLocaleDateString(undefined, {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  })
+                : "";
+
+              const countLabel = `${count} commit${count === 1 ? "" : "s"}`;
+              const title = dateLabel ? `${countLabel} on ${dateLabel}` : countLabel;
+
+              return (
+                <span
+                  // eslint-disable-next-line react/no-array-index-key
+                  key={`${rowIdx}-${colIdx}`}
+                  title={title}
+                  className={`h-[10px] w-[10px] rounded-[2px] ${cellBg(level(count))}`}
+                />
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
