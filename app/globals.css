@@ -23,3 +23,37 @@ a { @apply underline-offset-4 hover:underline; }
 h1 { @apply tracking-tight text-[clamp(28px,6vw,48px)] font-semibold leading-[1.02]; }
 h2 { @apply tracking-tight text-[clamp(20px,3.5vw,28px)] font-medium; }
 p, li { @apply tracking-tight; }
+    
+/* --- hover float animations (Contact page) --- */
+
+@keyframes floatContact {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  20% {
+    transform: translate3d(-6px, -12px, 0);
+  }
+  50% {
+    transform: translate3d(6px, 4px, 0);
+  }
+  80% {
+    transform: translate3d(-4px, -8px, 0);
+  }
+}
+
+@keyframes floatConnect {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  20% {
+    transform: translate3d(6px, -12px, 0);
+  }
+  50% {
+    transform: translate3d(-6px, 4px, 0);
+  }
+  80% {
+    transform: translate3d(4px, -8px, 0);
+  }
+}
