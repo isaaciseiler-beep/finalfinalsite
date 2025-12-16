@@ -1,4 +1,3 @@
-// components/Brand.tsx — DROP-IN REPLACEMENT
 "use client";
 
 import Link from "next/link";
@@ -6,11 +5,8 @@ import { ArrowLeft, Menu } from "lucide-react";
 import BrandMark from "./BrandMark";
 import { useSidebar } from "./SidebarContext";
 
-// 50% bigger logo (visual scale)
 const LOGO_SCALE = 1.5;
-
-// 20% bigger icon than the previous 16px
-const ICON_SIZE = 19.2;
+const ICON_SIZE = 19.2; // 20% bigger than 16
 
 export default function Brand() {
   const { open, setOpen } = useSidebar();
@@ -21,10 +17,6 @@ export default function Brand() {
         className="relative isolate inline-flex items-center whitespace-nowrap"
         style={{ gap: "0.375rem" }}
       >
-        {/*
-          Scaling via transform expands the Link's clickable area.
-          Keep the toggle button above it (z-10) so clicks never route to the logo.
-        */}
         <Link
           href="/"
           aria-label="go home"
@@ -39,7 +31,7 @@ export default function Brand() {
 
         <button
           aria-label={open ? "close navigation" : "open navigation"}
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => setOpen(!open)}
           className="relative z-10 p-2 transition hover:opacity-80 focus:outline-none shrink-0"
           type="button"
         >
