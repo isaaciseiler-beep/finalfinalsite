@@ -34,10 +34,12 @@ export default function HoverCardRow({
   blurb,
   onEnterInternal,
   onEnterExternal,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onLeaveAll,
   reduceMotion,
 }: HoverCardRowProps) {
+  // keep compatibility without triggering eslint plugin rules
+  void onLeaveAll;
+
   const showCard = open && !external;
 
   const setRowRef = React.useCallback<React.RefCallback<HTMLDivElement>>(
@@ -47,7 +49,7 @@ export default function HoverCardRow({
     [rowRef]
   );
 
-  // One shared highlight element that morphs between rows (no separate “pill layer” to misalign)
+  // shared highlight element morphs between rows (no separate “pill layer” to misalign)
   const pillTransition = reduceMotion
     ? { layout: { duration: 0 }, opacity: { duration: 0 } }
     : {
@@ -66,7 +68,6 @@ export default function HoverCardRow({
           : { layout: { type: "tween", duration: 0.26, ease: EASE_IOS } }
       }
     >
-      {/* White rounded background that follows the hovered row (shared layout). */}
       <AnimatePresence initial={false}>
         {showCard && (
           <motion.div
@@ -92,7 +93,6 @@ export default function HoverCardRow({
         aria-expanded={open}
         style={{ textDecoration: "none" }}
       >
-        {/* header row */}
         <div
           className={`flex items-center justify-between px-3 py-2 text-sm ${
             showCard
@@ -133,7 +133,6 @@ export default function HoverCardRow({
           )}
         </div>
 
-        {/* expanded content: measured height animation (no max-height artifacts) */}
         <AnimatePresence initial={false}>
           {showCard && (
             <motion.div
