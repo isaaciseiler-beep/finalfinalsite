@@ -1,13 +1,7 @@
-// components/Sidebar.tsx  ← DROP-IN REPLACEMENT
 "use client";
 import * as React from "react";
 import { usePathname } from "next/navigation";
-import {
-  motion,
-  AnimatePresence,
-  LayoutGroup,
-  useReducedMotion,
-} from "framer-motion";
+import { motion, AnimatePresence, LayoutGroup, useReducedMotion } from "framer-motion";
 import { useSidebar } from "./SidebarContext";
 import HoverCardRow from "./HoverCardRow";
 
@@ -19,7 +13,6 @@ const nav: NavItem[] = [
   { href: "/experience", label: "Experience" },
   { href: "/photos", label: "Photos" },
   { href: "/contact", label: "Contact" },
-  { href: "/blog", label: "Blog" },
   {
     href: "https://www.linkedin.com/in/isaacseiler/",
     label: "LinkedIn",
@@ -27,39 +20,13 @@ const nav: NavItem[] = [
   },
 ];
 
-const PREVIEW: Record<string, { badge: string; title: string; blurb: string }> =
-  {
-    "/about": {
-      badge: "profile",
-      title: "about me",
-      blurb: "A little about me and what I do",
-    },
-    "/projects": {
-      badge: "work",
-      title: "projects",
-      blurb: "Some of the work I’m most proud of",
-    },
-    "/experience": {
-      badge: "resume",
-      title: "experience",
-      blurb: "Stuff I’ve done and places I’ve worked",
-    },
-    "/photos": {
-      badge: "gallery",
-      title: "photos",
-      blurb: "Pictures I love of places I love",
-    },
-    "/contact": {
-      badge: "reach out",
-      title: "contact",
-      blurb: "Get in touch and let’s connect",
-    },
-    "/blog": {
-      badge: "notes",
-      title: "blog",
-      blurb: "Thoughts and opinions",
-    },
-  };
+const PREVIEW: Record<string, { badge: string; title: string; blurb: string }> = {
+  "/about": { badge: "profile", title: "about me", blurb: "A little about me and what I do" },
+  "/projects": { badge: "work", title: "projects", blurb: "Some of the work I’m most proud of" },
+  "/experience": { badge: "resume", title: "experience", blurb: "Stuff I’ve done and places I’ve worked" },
+  "/photos": { badge: "gallery", title: "photos", blurb: "Pictures I love of places I love" },
+  "/contact": { badge: "reach out", title: "contact", blurb: "Get in touch and let’s connect" },
+};
 
 // slightly slower ease-out tail
 const EASE_DECEL: [number, number, number, number] = [0.05, 0.7, 0.12, 1];
@@ -75,7 +42,7 @@ export default function Sidebar() {
   const [hoverHref, setHoverHref] = React.useState<string | null>(null);
   const [rowSpacer, setRowSpacer] = React.useState<number>(0);
 
-  // One close timer only (per-row timers cause hover lag/flicker when moving fast).
+  // One close timer only; hover opens immediately (more responsive).
   const closeTimer = React.useRef<number | null>(null);
 
   const clearCloseTimer = () => {
@@ -93,9 +60,9 @@ export default function Sidebar() {
     setHoverHref(null);
   };
 
+  // Only close when leaving the whole menu area (prevents flicker in gaps)
   const onLeaveMenu = () => {
     clearCloseTimer();
-    // tiny delay prevents accidental flicker when crossing gaps
     closeTimer.current = window.setTimeout(() => setHoverHref(null), 80);
   };
 
@@ -127,11 +94,7 @@ export default function Sidebar() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // If the sidebar is closed or we navigate, clear any open preview.
-  React.useEffect(() => {
-    if (!open) setHoverHref(null);
-  }, [open]);
-
+  // If we navigate, drop the hover card (avoids “stuck open”)
   React.useEffect(() => {
     setHoverHref(null);
   }, [pathname]);
@@ -144,9 +107,7 @@ export default function Sidebar() {
           initial={{ x: -260 }}
           animate={{ x: 0 }}
           exit={{ x: -260 }}
-          transition={
-            reduce ? { duration: 0.2 } : { duration: 0.42, ease: EASE_DECEL }
-          }
+          transition={reduce ? { duration: 0.2 } : { duration: 0.42, ease: EASE_DECEL }}
           className="fixed left-0 top-0 z-[50] h-dvh w-[240px] bg-black not-prose pointer-events-auto"
           style={{ isolation: "isolate" }}
         >
@@ -158,6 +119,7 @@ export default function Sidebar() {
                 onPointerLeave={onLeaveMenu}
               >
                 <div style={{ height: rowSpacer || 0 }} aria-hidden="true" />
+
                 {nav.map((item) => {
                   const active = pathname === item.href;
                   const isExternal = !!item.external;
@@ -177,13 +139,14 @@ export default function Sidebar() {
                       blurb={p?.blurb}
                       onEnterInternal={() => onEnterInternal(item.href)}
                       onEnterExternal={onEnterExternal}
-                      onLeaveAll={onLeaveMenu} // kept for compatibility
+                      onLeaveAll={onLeaveMenu} // kept for API compatibility; close is handled at container level now
                       reduceMotion={reduce}
                     />
                   );
                 })}
               </div>
             </LayoutGroup>
+
             <div className="mt-auto" />
           </div>
         </motion.aside>
@@ -191,4 +154,5 @@ export default function Sidebar() {
     </AnimatePresence>
   );
 }
+
 
