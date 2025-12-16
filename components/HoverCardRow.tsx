@@ -4,7 +4,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowUpRight } from "lucide-react";
 
-const EASE_DECEL: [number, number, number, number] = [0.05, 0.7, 0.12, 1];
+const EASE_IOS: [number, number, number, number] = [0.2, 0.0, 0.0, 1.0];
 
 export type HoverCardRowProps = {
   href: string;
@@ -34,34 +34,29 @@ export default function HoverCardRow({
 }: HoverCardRowProps) {
   const showCard = open && !external;
 
-  // Fast + controlled (no rubbery bounce)
-  const pillSpring = reduceMotion
-    ? { duration: 0.01 }
-    : { type: "spring" as const, stiffness: 900, damping: 70, mass: 0.55 };
+  const pillTransition = reduceMotion
+    ? { duration: 0 }
+    : { type: "tween" as const, duration: 0.18, ease: EASE_IOS };
 
-  // Content expand/collapse: quick + smooth, no vertical “slide”
-  const contentMs = reduceMotion ? 1 : 170;
+  // 2-line blurb + padding fits comfortably under this ceiling
+  const MAX_PREVIEW_H = 84;
 
   return (
-    <motion.div
-      layout
-      transition={{ layout: pillSpring }}
-      className="relative overflow-visible bg-black"
-    >
-      {/* White pill: shared layout element that moves & resizes instantly */}
+    <div className="relative overflow-visible bg-black">
+      {/* white rounded background that GLIDES between rows (no bounce) */}
       {showCard && (
         <motion.div
           layoutId="hovercard-bg"
-          transition={pillSpring}
           className="pointer-events-none absolute inset-0 z-0 rounded-2xl bg-white shadow-[0_12px_28px_rgba(0,0,0,0.35)]"
+          transition={pillTransition}
           style={{ willChange: "transform" }}
         />
       )}
 
       <Link
         href={href}
-        // Optional perf tweak: prevents route prefetch work on hover from competing with animation.
-        // If you like prefetching, remove this line.
+        // Optional perf tweak: prevents prefetch work from competing with hover animation.
+        // If you prefer default prefetching, remove this prop.
         prefetch={false}
         className="group relative z-10 block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-neutral-700"
         onPointerEnter={() => (external ? onEnterExternal?.() : onEnterInternal())}
@@ -91,13 +86,16 @@ export default function HoverCardRow({
           ) : (
             <span className="relative font-normal">
               {label}
+              {/* underline for active/hover */}
               <motion.span
                 className="pointer-events-none absolute -bottom-[2px] left-0 h-px w-full bg-current"
                 style={{ transformOrigin: "left" }}
-                initial={{ scaleX: 0 }}
+                initial={false}
                 animate={{ scaleX: open || active ? 1 : 0 }}
                 transition={
-                  reduceMotion ? { duration: 0.01 } : { duration: 0.28, ease: EASE_DECEL }
+                  reduceMotion
+                    ? { duration: 0 }
+                    : { type: "tween", duration: 0.22, ease: EASE_IOS }
                 }
               />
             </span>
@@ -110,27 +108,25 @@ export default function HoverCardRow({
           )}
         </div>
 
-        {/* expanded content (same form), smoother than height:auto */}
+        {/* expanded content: stable, no bounce, expands DOWN */}
         <div
-          className="grid overflow-hidden"
+          className="overflow-hidden"
           style={{
-            gridTemplateRows: showCard ? "1fr" : "0fr",
+            maxHeight: showCard ? MAX_PREVIEW_H : 0,
             opacity: showCard ? 1 : 0,
-            transitionProperty: "grid-template-rows, opacity",
-            transitionDuration: `${contentMs}ms, ${Math.max(90, contentMs - 50)}ms`,
-            transitionTimingFunction: `cubic-bezier(${EASE_DECEL.join(",")}), linear`,
+            transition: reduceMotion
+              ? "none"
+              : `max-height 200ms cubic-bezier(${EASE_IOS.join(",")}), opacity 120ms linear`,
           }}
           aria-hidden={!showCard}
         >
-          <div className="overflow-hidden">
-            <div className="px-3 pb-3 pt-0.5">
-              <div className="line-clamp-2 text-xs leading-relaxed text-black/80">
-                {blurb}
-              </div>
+          <div className="px-3 pb-3 pt-0.5">
+            <div className="line-clamp-2 text-xs leading-relaxed text-black/80">
+              {blurb}
             </div>
           </div>
         </div>
       </Link>
-    </motion.div>
+    </div>
   );
 }
