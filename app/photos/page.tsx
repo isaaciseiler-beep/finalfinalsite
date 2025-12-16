@@ -1,4 +1,4 @@
-// app/photos/page.tsx
+// app/photos/page.tsx — DROP-IN REPLACEMENT
 "use client";
 
 import {
@@ -20,6 +20,7 @@ import { Map as MapIcon, SlidersHorizontal } from "lucide-react";
 import Image from "next/image";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { createPortal } from "react-dom";
+import Container from "@/components/Container";
 
 export const dynamic = "force-static";
 
@@ -1151,11 +1152,6 @@ function WindowFrame({
     offset: ["start end", "end start"],
   });
 
-  // window borders:
-  // - phase a: top+bottom retract until the photo is full-screen
-  // - phase b: hold (full-screen; photo frozen; pill visible)
-  // - phase c: pill disappears
-  // - phase d: bottom border moves up (photo exits)
   const topInset = useTransform(scrollYProgress, [0, 0.22], ["22%", "0%"]);
   const bottomInset = useTransform(
     scrollYProgress,
@@ -1164,15 +1160,12 @@ function WindowFrame({
   );
   const clipPath = useMotionTemplate`inset(${topInset} 0% ${bottomInset} 0%)`;
 
-  // parallax tied directly to scroll (no spring): photo moves slower than the page,
-  // freezes during the full-screen hold, then resumes as the bottom border closes.
   const imageY = useTransform(
     scrollYProgress,
     [0, 0.22, 0.72, 1],
     ["-20%", "0%", "0%", "20%"],
   );
 
-  // location pill: only during the full-screen hold; hides before the bottom border starts moving
   const pillOpacity = useTransform(
     scrollYProgress,
     [0, 0.22, 0.28, 0.60, 0.68, 1],
@@ -1185,7 +1178,6 @@ function WindowFrame({
 
   return (
     <div className="col-span-12" id={`photo-${photo.id}`}>
-      {/* no 100vw breakout: stays inside whatever main layout uses next to sidebar */}
       <div ref={sectionRef} className="relative h-[220vh] md:h-[240vh]">
         <div className="sticky top-0 h-dvh bg-black overflow-hidden">
           <motion.div
@@ -1193,7 +1185,6 @@ function WindowFrame({
             className="absolute inset-0 will-change-[clip-path]"
           >
             <motion.div
-              // scale prevents edge reveal while translating
               style={{ y: imageY, scale: 1.12 }}
               className="absolute inset-0 will-change-transform"
             >
@@ -1318,9 +1309,6 @@ function MapPanel({ photos, visible, onSelectPhoto }: MapPanelProps) {
   const visibleHostRef = useRef<HTMLDivElement | null>(null);
   const preloadHostRef = useRef<HTMLDivElement | null>(null);
 
-  // We keep a single container element for Mapbox and move it between:
-  // - offscreen preload host (always mounted)
-  // - visible host (inside the expanded pane)
   const mapRootElRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const mapboxRef = useRef<any>(null);
@@ -1334,7 +1322,6 @@ function MapPanel({ photos, visible, onSelectPhoto }: MapPanelProps) {
 
   const geotagged = useMemo(() => {
     return photos.filter((p) => {
-      // Only plot real geotags.
       if (!isValidLatLng(p.latitude, p.longitude)) return false;
       if (p.latitude === 0 && p.longitude === 0) return false;
       return !isHoldText(p.locationLabel);
@@ -1355,14 +1342,12 @@ function MapPanel({ photos, visible, onSelectPhoto }: MapPanelProps) {
       }
     };
 
-    // double-rAF ensures layout/paint has settled (helps with Framer layout transitions)
     requestAnimationFrame(() => requestAnimationFrame(kick));
     setTimeout(kick, 90);
     setTimeout(kick, 220);
     setTimeout(kick, 420);
   }, []);
 
-  // Create the map container element once.
   useEffect(() => {
     if (!mounted) return;
     if (mapRootElRef.current) return;
@@ -1374,7 +1359,6 @@ function MapPanel({ photos, visible, onSelectPhoto }: MapPanelProps) {
     mapRootElRef.current = el;
   }, [mounted]);
 
-  // Preload mapbox-gl ASAP (no dependency additions).
   useEffect(() => {
     let cancelled = false;
 
@@ -1403,7 +1387,6 @@ function MapPanel({ photos, visible, onSelectPhoto }: MapPanelProps) {
     };
   }, []);
 
-  // Move the map container between preload + visible hosts (keeps map warm/instant).
   useLayoutEffect(() => {
     if (!mounted) return;
     const root = mapRootElRef.current;
@@ -1416,11 +1399,9 @@ function MapPanel({ photos, visible, onSelectPhoto }: MapPanelProps) {
       target.appendChild(root);
     }
 
-    // Resize after move.
     nudgeResize();
   }, [mounted, visible, nudgeResize]);
 
-  // Create the map once, as soon as mapbox module + host exist.
   useEffect(() => {
     if (!mounted) return;
     if (tokenMissing) return;
@@ -1432,12 +1413,10 @@ function MapPanel({ photos, visible, onSelectPhoto }: MapPanelProps) {
 
     if (!mapboxgl || !root || !preloadHost) return;
 
-    // Ensure the root is in the DOM before map construction.
     if (root.parentElement !== preloadHost) {
       preloadHost.appendChild(root);
     }
 
-    // Initial view: if we have tags use their average, else a neutral world view.
     const avgLat =
       geotagged.length > 0
         ? geotagged.reduce((s, p) => s + p.latitude, 0) / geotagged.length
@@ -1463,7 +1442,6 @@ function MapPanel({ photos, visible, onSelectPhoto }: MapPanelProps) {
       nudgeResize();
     });
 
-    // Keep map sized correctly through viewport changes.
     const onWinResize = () => nudgeResize();
     window.addEventListener("resize", onWinResize);
     window.addEventListener("orientationchange", onWinResize);
@@ -1483,7 +1461,6 @@ function MapPanel({ photos, visible, onSelectPhoto }: MapPanelProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted, tokenMissing, nudgeResize]);
 
-  // Observe host size changes (Framer layout animation) and resize the map.
   useEffect(() => {
     if (!mounted) return;
     const map = mapRef.current;
@@ -1506,13 +1483,11 @@ function MapPanel({ photos, visible, onSelectPhoto }: MapPanelProps) {
     return () => ro.disconnect();
   }, [mounted, visible]);
 
-  // Update markers + camera when the filtered photo set changes.
   useEffect(() => {
     const map = mapRef.current;
     const mapboxgl = mapboxRef.current;
     if (!map || !mapboxgl) return;
 
-    // Clear old markers
     markersRef.current.forEach((m) => {
       try {
         m.remove();
@@ -1522,7 +1497,6 @@ function MapPanel({ photos, visible, onSelectPhoto }: MapPanelProps) {
     });
     markersRef.current = [];
 
-    // Add markers for currently visible (filtered) set
     geotagged.forEach((photo) => {
       const el = document.createElement("button");
       el.type = "button";
@@ -1542,7 +1516,6 @@ function MapPanel({ photos, visible, onSelectPhoto }: MapPanelProps) {
       markersRef.current.push(marker);
     });
 
-    // Update camera
     const animate = visible;
     const duration = animate ? 520 : 0;
 
@@ -1577,7 +1550,6 @@ function MapPanel({ photos, visible, onSelectPhoto }: MapPanelProps) {
 
   return (
     <>
-      {/* Offscreen preload host (keeps the map warm so opening feels instant). */}
       {createPortal(
         <div
           ref={preloadHostRef}
@@ -1590,19 +1562,16 @@ function MapPanel({ photos, visible, onSelectPhoto }: MapPanelProps) {
       <div className="absolute inset-0">
         <div ref={visibleHostRef} className="absolute inset-0" />
 
-        {/* Loading shimmer (only until style has loaded) */}
         {!ready && !tokenMissing && (
           <div className="absolute inset-0 animate-pulse bg-gradient-to-b from-neutral-900 via-neutral-800/80 to-neutral-900" />
         )}
 
-        {/* Token missing */}
         {tokenMissing && (
           <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-neutral-200">
             NEXT_PUBLIC_MAPBOX_TOKEN missing.
           </div>
         )}
 
-        {/* No tags (still show map if it exists, but message explains markers) */}
         {!tokenMissing && !hasGeotags && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-neutral-200/90">
             add latitude / longitude to your photos to see them plotted here.
@@ -1823,7 +1792,6 @@ function FloatingControls({
       pressTimerRef.current = null;
     }
 
-    // iOS-like long-press
     pressTimerRef.current = window.setTimeout(() => {
       longPressFiredRef.current = true;
       openMode(next);
@@ -1838,7 +1806,6 @@ function FloatingControls({
       pressTimerRef.current = null;
     }
 
-    // If long-press already opened, do not toggle on release.
     if (!longPressFiredRef.current) {
       toggleMode(next);
     }
@@ -1856,7 +1823,6 @@ function FloatingControls({
 
   return createPortal(
     <>
-      {/* click-off overlay */}
       <AnimatePresence>
         {open && (
           <motion.button
@@ -1875,10 +1841,8 @@ function FloatingControls({
         )}
       </AnimatePresence>
 
-      {/* fixed anchor (pill never changes size/position) */}
       <div className="fixed bottom-5 right-3 z-[200] md:bottom-7 md:right-6">
         <div className="relative">
-          {/* POPUP PANEL (anchored above the pill; kept mounted so the map stays warm) */}
           <motion.div
             className="absolute right-0 bottom-[3.25rem] z-[10] w-[min(780px,96vw)]"
             initial="closed"
@@ -1905,9 +1869,7 @@ function FloatingControls({
             }}
             aria-hidden={!panelOpen}
           >
-            {/* glass container (NO white ring/border) */}
             <div className="relative h-[22rem] w-full overflow-hidden rounded-2xl bg-neutral-900/70 backdrop-blur-2xl shadow-[0_14px_55px_rgba(0,0,0,0.62)]">
-              {/* Map layer */}
               <motion.div
                 initial={false}
                 animate={{
@@ -1927,7 +1889,6 @@ function FloatingControls({
                 />
               </motion.div>
 
-              {/* Filters layer (inherits the same glass; no solid panel bg) */}
               <motion.div
                 initial={false}
                 animate={{
@@ -1949,9 +1910,7 @@ function FloatingControls({
             </div>
           </motion.div>
 
-          {/* ICON PILL (always fixed; background fades when popup opens) */}
           <div className="relative z-[20] flex items-center gap-2 rounded-full px-1.5 py-1">
-            {/* background layer that fades out on open */}
             <motion.div
               aria-hidden="true"
               className="pointer-events-none absolute inset-0 rounded-full bg-black/35 backdrop-blur-md shadow-[0_10px_28px_rgba(0,0,0,0.70)]"
@@ -1970,16 +1929,12 @@ function FloatingControls({
               className={[
                 "relative inline-flex h-9 w-9 items-center justify-center rounded-full",
                 "transition focus-visible:outline-none active:scale-[0.96]",
-                // per-icon shadow when open (so icons remain legible over content)
                 open ? "shadow-[0_10px_28px_rgba(0,0,0,0.70)]" : "",
-                // no pill border/ring; active state uses color only when open
                 open
                   ? mode === "map"
                     ? "text-white"
                     : "text-neutral-200 hover:text-white"
-                  : mode === "map" && open
-                    ? "text-white"
-                    : "text-neutral-200 hover:bg-white/10",
+                  : "text-neutral-200 hover:bg-white/10",
               ].join(" ")}
             >
               <MapIcon className="h-4 w-4 drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]" />
@@ -2002,7 +1957,7 @@ function FloatingControls({
                   ? mode === "filters" || activeFiltersCount > 0
                     ? "text-white"
                     : "text-neutral-200 hover:text-white"
-                  : (mode === "filters" && open) || activeFiltersCount > 0
+                  : activeFiltersCount > 0
                     ? "bg-white/15 text-white"
                     : "text-neutral-200 hover:bg-white/10",
               ].join(" ")}
@@ -2026,7 +1981,6 @@ export default function PhotosPage() {
     subjects: new Set(),
   });
 
-  // Track images that fail to load (removes blank HOLD blocks caused by mismatches).
   const [brokenPhotoIds, setBrokenPhotoIds] = useState<Set<string>>(() => new Set());
 
   const reportBroken = useCallback((id: string) => {
@@ -2069,35 +2023,37 @@ export default function PhotosPage() {
 
   return (
     <>
-      {/* IMPORTANT: this stays inside the app’s main layout, so it flexes with sidebar */}
-      <div className="w-full max-w-none overflow-x-hidden">
-        <div className="px-4 sm:px-6 pt-[112px] md:pt-[112px] pb-10">
-          <div className="relative overflow-visible">
-            <div className="grid grid-cols-12 gap-6 md:gap-10">
-              {filteredPhotos.map((photo) => {
-                const index0 = getPhotoIndex0(photo.id);
-                const variant = computeLayoutVariant(photo, index0);
+      <Container>
+        {/* match experience page scaffold so the first photo aligns with edu/about baseline */}
+        <div className="-mx-4 sm:-mx-6 overflow-x-hidden">
+          <div className="px-4 sm:px-6 pt-[112px] md:pt-[112px] pb-10">
+            <div className="relative overflow-visible">
+              <div className="grid grid-cols-12 gap-6 md:gap-10">
+                {filteredPhotos.map((photo) => {
+                  const index0 = getPhotoIndex0(photo.id);
+                  const variant = computeLayoutVariant(photo, index0);
 
-                return variant === "window" ? (
-                  <WindowFrame
-                    key={photo.id}
-                    photo={photo}
-                    index0={index0}
-                    onImageError={reportBroken}
-                  />
-                ) : (
-                  <GridPhotoCard
-                    key={photo.id}
-                    photo={photo}
-                    index0={index0}
-                    onImageError={reportBroken}
-                  />
-                );
-              })}
+                  return variant === "window" ? (
+                    <WindowFrame
+                      key={photo.id}
+                      photo={photo}
+                      index0={index0}
+                      onImageError={reportBroken}
+                    />
+                  ) : (
+                    <GridPhotoCard
+                      key={photo.id}
+                      photo={photo}
+                      index0={index0}
+                      onImageError={reportBroken}
+                    />
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </Container>
 
       <FloatingControls
         photos={filteredPhotos}
