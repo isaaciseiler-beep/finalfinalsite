@@ -96,14 +96,17 @@ export default function EducationPopup({ open, onToggle }: Props) {
 
       {/* content shell */}
       <div className="relative z-10">
-        {/* single, stationary header row */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="text-lg leading-tight tracking-tight md:text-xl">
-            My education
+        {/* header row (updated: matches page header typography) */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="text-5xl font-normal leading-none tracking-tight md:text-7xl">
+              Educational Credentials
+            </div>
           </div>
+
           <span
             aria-hidden
-            className="text-sm md:text-base transition-transform duration-300"
+            className="mt-1 text-xl md:mt-2 md:text-2xl transition-transform duration-300"
           >
             {open ? "↑" : "↓"}
           </span>
@@ -239,3 +242,4 @@ function UnderlineLink({
     </a>
   );
 }
+
