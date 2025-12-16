@@ -161,7 +161,7 @@ export default function GitWidget({ repoUrl, stars }: Props) {
             >
               <div className="w-full">
                 {/* bottom sheet (top corners only) */}
-                <div className="rounded-t-3xl bg-[#aa96af] shadow-[0_18px_45px_rgba(0,0,0,0.35)] min-h-[75vh] flex flex-col">
+                <div className="rounded-t-3xl bg-[#aa96af] shadow-[0_18px_45px_rgba(0,0,0,0.35)]">
                   {/* header */}
                   <div className="flex items-center justify-between px-5 pt-5 pb-4">
                     <Github className="h-5 w-5 text-neutral-950/90" />
@@ -172,7 +172,7 @@ export default function GitWidget({ repoUrl, stars }: Props) {
 
                   {/* content */}
                   <motion.div
-                    className="px-5 pb-[calc(env(safe-area-inset-bottom)+1rem)] flex-1 flex flex-col"
+                    className="px-5 pb-[calc(env(safe-area-inset-bottom)+1rem)]"
                     variants={list}
                     initial="hidden"
                     animate="show"
@@ -195,7 +195,7 @@ export default function GitWidget({ repoUrl, stars }: Props) {
                         </div>
                       </motion.div>
 
-                      {/* commits: no shaded wrapper; grid fills the card width */}
+                      {/* commits: grid fills the card width */}
                       <motion.div
                         variants={item}
                         className="rounded-2xl bg-white/35 p-4 sm:col-span-2"
@@ -210,10 +210,10 @@ export default function GitWidget({ repoUrl, stars }: Props) {
                       </motion.div>
                     </div>
 
-                    {/* footer line (restored exactly) */}
+                    {/* footer line (restored) */}
                     <motion.div
                       variants={item}
-                      className={`mt-auto pt-6 flex items-center justify-center gap-4 ${footerText}`}
+                      className={`mt-6 flex items-center justify-center gap-4 ${footerText}`}
                     >
                       <span className="inline-flex items-center gap-2">
                         <OpenAIIcon className="h-4 w-4" />
@@ -290,7 +290,11 @@ function CommitGrid({ weeks }: { weeks: CommitActivityWeek[] }) {
             const ts = (w.week ?? 0) + rowIdx * 86400;
             const d = new Date(ts * 1000);
             const dateLabel = Number.isFinite(d.getTime())
-              ? d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
+              ? d.toLocaleDateString(undefined, {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
+                })
               : "";
             const title = dateLabel
               ? `${count} commit${count === 1 ? "" : "s"} on ${dateLabel}`
@@ -310,10 +314,9 @@ function CommitGrid({ weeks }: { weeks: CommitActivityWeek[] }) {
   );
 }
 
-/* inline logos (no external img requests, matches text color via currentColor) */
+/* inline logos (no external img requests; inherits currentColor) */
 
 function OpenAIIcon({ className }: { className?: string }) {
-  // bootstrap icons "openai" svg path (fill=currentColor)
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
