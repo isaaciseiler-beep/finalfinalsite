@@ -398,4 +398,3 @@ function fnv1a(str: string) {
   }
   return h >>> 0;
 }
-
