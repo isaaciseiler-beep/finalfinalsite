@@ -8,15 +8,15 @@ function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
-type TileProps = {
+type BlobTileProps = {
   label: string;
   href: string;
   blobColor: string;
-  hoverTextClassName: string;
+  seed: "connect" | "email";
   external?: boolean;
 };
 
-function BlobTile({ label, href, blobColor, hoverTextClassName, external }: TileProps) {
+function BlobTile({ label, href, blobColor, seed, external }: BlobTileProps) {
   const ref = React.useRef<HTMLAnchorElement | null>(null);
   const raf = React.useRef<number | null>(null);
 
@@ -33,7 +33,7 @@ function BlobTile({ label, href, blobColor, hoverTextClassName, external }: Tile
     const t = target.current;
     const c = current.current;
 
-    // spring-ish smoothing (higher = snappier)
+    // spring smoothing: higher = snappier
     const s = 0.16;
 
     c.mx += (t.mx - c.mx) * s;
@@ -41,13 +41,10 @@ function BlobTile({ label, href, blobColor, hoverTextClassName, external }: Tile
     c.rx += (t.rx - c.rx) * s;
     c.ry += (t.ry - c.ry) * s;
 
-    const hx = c.mx * 1.4;
-    const hy = c.my * 1.4;
-
     el.style.setProperty("--mx", `${c.mx.toFixed(2)}px`);
     el.style.setProperty("--my", `${c.my.toFixed(2)}px`);
-    el.style.setProperty("--hx", `${hx.toFixed(2)}px`);
-    el.style.setProperty("--hy", `${hy.toFixed(2)}px`);
+    el.style.setProperty("--hx", `${(c.mx * 1.35).toFixed(2)}px`);
+    el.style.setProperty("--hy", `${(c.my * 1.35).toFixed(2)}px`);
     el.style.setProperty("--rx", `${c.rx.toFixed(2)}deg`);
     el.style.setProperty("--ry", `${c.ry.toFixed(2)}deg`);
 
@@ -57,11 +54,8 @@ function BlobTile({ label, href, blobColor, hoverTextClassName, external }: Tile
       Math.abs(t.rx - c.rx) < 0.02 &&
       Math.abs(t.ry - c.ry) < 0.02;
 
-    if (!done) {
-      raf.current = window.requestAnimationFrame(tick);
-    } else {
-      raf.current = null;
-    }
+    if (!done) raf.current = window.requestAnimationFrame(tick);
+    else raf.current = null;
   }, []);
 
   const kick = React.useCallback(() => {
@@ -77,12 +71,9 @@ function BlobTile({ label, href, blobColor, hoverTextClassName, external }: Tile
       const px = ((e.clientX - r.left) / Math.max(1, r.width)) * 2 - 1;
       const py = ((e.clientY - r.top) / Math.max(1, r.height)) * 2 - 1;
 
-      const mx = clamp(px, -1, 1) * 16;
-      const my = clamp(py, -1, 1) * 16;
-
       target.current = {
-        mx,
-        my,
+        mx: clamp(px, -1, 1) * 16,
+        my: clamp(py, -1, 1) * 16,
         rx: clamp(py, -1, 1) * -7,
         ry: clamp(px, -1, 1) * 7,
       };
@@ -106,13 +97,14 @@ function BlobTile({ label, href, blobColor, hoverTextClassName, external }: Tile
   return (
     <a
       ref={ref}
+      data-seed={seed}
       href={href}
       target={external ? "_blank" : undefined}
       rel={external ? "noreferrer noopener" : undefined}
       onPointerMove={onPointerMove}
       onPointerLeave={onPointerLeave}
       style={{ ["--blob" as any]: blobColor } as React.CSSProperties}
-      className="contact-tile contact-tile--square group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+      className="contact-tile contact-tile--square focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
       aria-label={label}
     >
       <span className="contact-tile__plate" aria-hidden="true" />
@@ -122,20 +114,12 @@ function BlobTile({ label, href, blobColor, hoverTextClassName, external }: Tile
           <span className="contact-tile__blob">
             <span className="contact-tile__shine" />
             <span className="contact-tile__rim" />
+            <span className="contact-tile__blobLabel">{label}</span>
           </span>
         </span>
       </span>
 
-      <div className="relative z-[2] grid h-full w-full place-items-center">
-        <div
-          className={
-            "text-[clamp(44px,7vw,88px)] font-normal leading-none tracking-tight text-neutral-50 transition-colors duration-300 " +
-            hoverTextClassName
-          }
-        >
-          {label}
-        </div>
-      </div>
+      <div className="contact-tile__plateLabel">{label}</div>
     </a>
   );
 }
@@ -147,24 +131,22 @@ export default function Contact() {
         <div className="flex h-full flex-col px-4 sm:px-6 pt-[112px] md:pt-[112px]">
           <div className="min-h-0 flex-1">
             <div className="flex h-full flex-col justify-between gap-4 md:flex-row md:gap-6">
-              {/* top-anchored */}
               <div className="flex items-start justify-center md:flex-1">
                 <BlobTile
                   label="Connect"
                   href="https://www.linkedin.com/in/isaaciseiler/"
                   external
                   blobColor="#3e50cd"
-                  hoverTextClassName="group-hover:text-white"
+                  seed="connect"
                 />
               </div>
 
-              {/* bottom-anchored */}
               <div className="flex items-end justify-center md:flex-1">
                 <BlobTile
                   label="Email"
                   href="mailto:isaaciseiler@gmail.com"
                   blobColor="#aa96af"
-                  hoverTextClassName="group-hover:text-black/90"
+                  seed="email"
                 />
               </div>
             </div>
@@ -174,4 +156,3 @@ export default function Contact() {
     </main>
   );
 }
-
