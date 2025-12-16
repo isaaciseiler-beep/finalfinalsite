@@ -1,10 +1,9 @@
 "use client";
 import * as React from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { ArrowUpRight } from "lucide-react";
 
-// slightly slower ease-out tail
 const EASE_DECEL: [number, number, number, number] = [0.05, 0.7, 0.12, 1];
 
 export type HoverCardRowProps = {
@@ -18,7 +17,7 @@ export type HoverCardRowProps = {
   blurb?: string;
   onEnterInternal: () => void;
   onEnterExternal?: () => void;
-  onLeaveAll: () => void; // kept for compatibility (not used here anymore)
+  onLeaveAll: () => void; // kept for compatibility (not used here)
   reduceMotion: boolean;
 };
 
@@ -35,29 +34,35 @@ export default function HoverCardRow({
 }: HoverCardRowProps) {
   const showCard = open && !external;
 
-  const bgTransition = reduceMotion
-    ? { duration: 0.12 }
-    : { type: "spring" as const, stiffness: 720, damping: 60 };
+  // Fast + controlled (no rubbery bounce)
+  const pillSpring = reduceMotion
+    ? { duration: 0.01 }
+    : { type: "spring" as const, stiffness: 900, damping: 70, mass: 0.55 };
+
+  // Content expand/collapse: quick + smooth, no vertical “slide”
+  const contentMs = reduceMotion ? 1 : 170;
 
   return (
-    <div className="relative overflow-visible">
-      {/* white rounded background on hover/open */}
-      <AnimatePresence initial={false}>
-        {showCard && (
-          <motion.div
-            layoutId="hovercard-bg"
-            className="pointer-events-none absolute inset-0 z-0 rounded-2xl bg-white shadow-[0_12px_28px_rgba(0,0,0,0.35)]"
-            // Keep it “solid” while switching items; only disappears when nothing is hovered.
-            initial={{ opacity: 1 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={bgTransition}
-          />
-        )}
-      </AnimatePresence>
+    <motion.div
+      layout
+      transition={{ layout: pillSpring }}
+      className="relative overflow-visible bg-black"
+    >
+      {/* White pill: shared layout element that moves & resizes instantly */}
+      {showCard && (
+        <motion.div
+          layoutId="hovercard-bg"
+          transition={pillSpring}
+          className="pointer-events-none absolute inset-0 z-0 rounded-2xl bg-white shadow-[0_12px_28px_rgba(0,0,0,0.35)]"
+          style={{ willChange: "transform" }}
+        />
+      )}
 
       <Link
         href={href}
+        // Optional perf tweak: prevents route prefetch work on hover from competing with animation.
+        // If you like prefetching, remove this line.
+        prefetch={false}
         className="group relative z-10 block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-neutral-700"
         onPointerEnter={() => (external ? onEnterExternal?.() : onEnterInternal())}
         onFocus={() => (external ? onEnterExternal?.() : onEnterInternal())}
@@ -69,7 +74,11 @@ export default function HoverCardRow({
         {/* header row */}
         <div
           className={`flex items-center justify-between px-3 py-2 text-sm ${
-            showCard ? "text-black" : active ? "text-white font-medium" : "text-fg hover:text-white"
+            showCard
+              ? "text-black"
+              : active
+                ? "text-white font-medium"
+                : "text-fg hover:text-white"
           }`}
         >
           {external ? (
@@ -88,9 +97,7 @@ export default function HoverCardRow({
                 initial={{ scaleX: 0 }}
                 animate={{ scaleX: open || active ? 1 : 0 }}
                 transition={
-                  reduceMotion
-                    ? { duration: 0.1 }
-                    : { duration: 0.35, ease: EASE_DECEL }
+                  reduceMotion ? { duration: 0.01 } : { duration: 0.28, ease: EASE_DECEL }
                 }
               />
             </span>
@@ -103,15 +110,16 @@ export default function HoverCardRow({
           )}
         </div>
 
-        {/* expanded content: smooth, no "height:auto" measuring */}
+        {/* expanded content (same form), smoother than height:auto */}
         <div
-          className={[
-            "grid overflow-hidden",
-            "transition-all",
-            reduceMotion ? "duration-150" : "duration-250",
-            "ease-[cubic-bezier(0.05,0.7,0.12,1)]",
-            showCard ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
-          ].join(" ")}
+          className="grid overflow-hidden"
+          style={{
+            gridTemplateRows: showCard ? "1fr" : "0fr",
+            opacity: showCard ? 1 : 0,
+            transitionProperty: "grid-template-rows, opacity",
+            transitionDuration: `${contentMs}ms, ${Math.max(90, contentMs - 50)}ms`,
+            transitionTimingFunction: `cubic-bezier(${EASE_DECEL.join(",")}), linear`,
+          }}
           aria-hidden={!showCard}
         >
           <div className="overflow-hidden">
@@ -123,6 +131,6 @@ export default function HoverCardRow({
           </div>
         </div>
       </Link>
-    </div>
+    </motion.div>
   );
 }
