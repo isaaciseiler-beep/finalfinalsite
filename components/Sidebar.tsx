@@ -27,41 +27,39 @@ const nav: NavItem[] = [
   },
 ];
 
-const PREVIEW: Record<
-  string,
-  { badge: string; title: string; blurb: string }
-> = {
-  "/about": {
-    badge: "profile",
-    title: "about me",
-    blurb: "A little about me and what I do",
-  },
-  "/projects": {
-    badge: "work",
-    title: "projects",
-    blurb: "Some of the work I’m most prouf of",
-  },
-  "/experience": {
-    badge: "resume",
-    title: "experience",
-    blurb: "Stuff I’ve done and places I’ve worked",
-  },
-  "/photos": {
-    badge: "gallery",
-    title: "photos",
-    blurb: "Pictures I love of places I love",
-  },
-  "/contact": {
-    badge: "reach out",
-    title: "contact",
-    blurb: "Get in touch and let’s connect",
-  },
-  "/blog": {
-    badge: "notes",
-    title: "blog",
-    blurb: "Thoughts and opinions",
-  },
-};
+const PREVIEW: Record<string, { badge: string; title: string; blurb: string }> =
+  {
+    "/about": {
+      badge: "profile",
+      title: "about me",
+      blurb: "A little about me and what I do",
+    },
+    "/projects": {
+      badge: "work",
+      title: "projects",
+      blurb: "Some of the work I’m most proud of",
+    },
+    "/experience": {
+      badge: "resume",
+      title: "experience",
+      blurb: "Stuff I’ve done and places I’ve worked",
+    },
+    "/photos": {
+      badge: "gallery",
+      title: "photos",
+      blurb: "Pictures I love of places I love",
+    },
+    "/contact": {
+      badge: "reach out",
+      title: "contact",
+      blurb: "Get in touch and let’s connect",
+    },
+    "/blog": {
+      badge: "notes",
+      title: "blog",
+      blurb: "Thoughts and opinions",
+    },
+  };
 
 // slightly slower ease-out tail
 const EASE_DECEL: [number, number, number, number] = [0.05, 0.7, 0.12, 1];
@@ -77,36 +75,28 @@ export default function Sidebar() {
   const [hoverHref, setHoverHref] = React.useState<string | null>(null);
   const [rowSpacer, setRowSpacer] = React.useState<number>(0);
 
-  const enterTimer = React.useRef<number | null>(null);
-  const leaveTimer = React.useRef<number | null>(null);
+  // One close timer only (per-row timers cause hover lag/flicker when moving fast).
+  const closeTimer = React.useRef<number | null>(null);
 
-  const clearTimers = () => {
-    if (enterTimer.current) window.clearTimeout(enterTimer.current);
-    if (leaveTimer.current) window.clearTimeout(leaveTimer.current);
-    enterTimer.current = leaveTimer.current = null;
+  const clearCloseTimer = () => {
+    if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    closeTimer.current = null;
   };
 
   const onEnterInternal = (href: string) => {
-    if (leaveTimer.current) {
-      window.clearTimeout(leaveTimer.current);
-      leaveTimer.current = null;
-    }
-    if (enterTimer.current) window.clearTimeout(enterTimer.current);
-    enterTimer.current = window.setTimeout(() => setHoverHref(href), 110);
+    clearCloseTimer();
+    setHoverHref(href);
   };
 
   const onEnterExternal = () => {
-    clearTimers();
+    clearCloseTimer();
     setHoverHref(null);
   };
 
-  const onLeaveAll = () => {
-    if (enterTimer.current) {
-      window.clearTimeout(enterTimer.current);
-      enterTimer.current = null;
-    }
-    if (leaveTimer.current) window.clearTimeout(leaveTimer.current);
-    leaveTimer.current = window.setTimeout(() => setHoverHref(null), 140);
+  const onLeaveMenu = () => {
+    clearCloseTimer();
+    // tiny delay prevents accidental flicker when crossing gaps
+    closeTimer.current = window.setTimeout(() => setHoverHref(null), 80);
   };
 
   // measure a row once and set a spacer that pushes the list down
@@ -129,13 +119,22 @@ export default function Sidebar() {
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        clearTimers();
+        clearCloseTimer();
         setHoverHref(null);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  // If the sidebar is closed or we navigate, clear any open preview.
+  React.useEffect(() => {
+    if (!open) setHoverHref(null);
+  }, [open]);
+
+  React.useEffect(() => {
+    setHoverHref(null);
+  }, [pathname]);
 
   return (
     <AnimatePresence initial={false}>
@@ -155,7 +154,8 @@ export default function Sidebar() {
             <LayoutGroup>
               <div
                 className="flex flex-col gap-1 overflow-visible bg-black"
-                onMouseLeave={onLeaveAll}
+                onPointerEnter={clearCloseTimer}
+                onPointerLeave={onLeaveMenu}
               >
                 <div style={{ height: rowSpacer || 0 }} aria-hidden="true" />
                 {nav.map((item) => {
@@ -177,7 +177,7 @@ export default function Sidebar() {
                       blurb={p?.blurb}
                       onEnterInternal={() => onEnterInternal(item.href)}
                       onEnterExternal={onEnterExternal}
-                      onLeaveAll={onLeaveAll}
+                      onLeaveAll={onLeaveMenu} // kept for compatibility
                       reduceMotion={reduce}
                     />
                   );
