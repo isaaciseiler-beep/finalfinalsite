@@ -96,10 +96,10 @@ export default function EducationPopup({ open, onToggle }: Props) {
 
       {/* content shell */}
       <div className="relative z-10">
-        {/* header row (updated: matches page header typography) */}
+        {/* header row (20% smaller) */}
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <div className="text-5xl font-normal leading-none tracking-tight md:text-7xl">
+            <div className="text-4xl font-normal leading-none tracking-tight md:text-6xl">
               Educational Credentials
             </div>
           </div>
@@ -112,14 +112,17 @@ export default function EducationPopup({ open, onToggle }: Props) {
           </span>
         </div>
 
-        {/* expanding content area */}
+        {/* spacer to make button ~50% taller (empty space below header) */}
+        <div aria-hidden className="h-14 md:h-20" />
+
+        {/* expanding content area (starts below spacer) */}
         <motion.div
           layout
           initial={false}
           animate={open ? "expanded" : "collapsed"}
           variants={{
             collapsed: { opacity: 0, height: 0, marginTop: 0 },
-            expanded: { opacity: 1, height: "auto", marginTop: 18 },
+            expanded: { opacity: 1, height: "auto", marginTop: 0 },
           }}
           transition={{
             duration: 0.35,
@@ -128,7 +131,7 @@ export default function EducationPopup({ open, onToggle }: Props) {
           style={{ overflow: "hidden" }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="text-sm md:text-base">
+          <div className="pt-1 text-sm md:text-base">
             <div className="space-y-8 md:space-y-10 text-white/95">
               {/* WashU */}
               <section className="space-y-4">
@@ -242,4 +245,3 @@ function UnderlineLink({
     </a>
   );
 }
-
