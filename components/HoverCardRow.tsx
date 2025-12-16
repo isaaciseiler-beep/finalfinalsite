@@ -1,10 +1,11 @@
 "use client";
+
 import * as React from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { ArrowUpRight } from "lucide-react";
 
-// ios-ish (intentional, no bounce)
+// iOS-ish: smooth, no bounce
 const EASE_IOS: [number, number, number, number] = [0.2, 0.0, 0.0, 1.0];
 
 export type HoverCardRowProps = {
@@ -33,22 +34,57 @@ export default function HoverCardRow({
   blurb,
   onEnterInternal,
   onEnterExternal,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  onLeaveAll,
   reduceMotion,
 }: HoverCardRowProps) {
   const showCard = open && !external;
 
-  // slightly slower + more intentional than before
-  const dur = reduceMotion ? 0 : 0.26;
+  const setRowRef = React.useCallback<React.RefCallback<HTMLDivElement>>(
+    (el) => {
+      rowRef?.(el);
+    },
+    [rowRef]
+  );
 
-  // 2-line blurb container ceiling (stable)
-  const MAX_PREVIEW_H = 84;
+  // One shared highlight element that morphs between rows (no separate “pill layer” to misalign)
+  const pillTransition = reduceMotion
+    ? { layout: { duration: 0 }, opacity: { duration: 0 } }
+    : {
+        layout: { type: "tween", duration: 0.26, ease: EASE_IOS },
+        opacity: { duration: 0.12, ease: "linear" as const },
+      };
 
   return (
-    <div ref={rowRef} className="relative z-10 overflow-visible bg-black">
+    <motion.div
+      ref={setRowRef}
+      className="relative overflow-visible"
+      layout="position"
+      transition={
+        reduceMotion
+          ? { layout: { duration: 0 } }
+          : { layout: { type: "tween", duration: 0.26, ease: EASE_IOS } }
+      }
+    >
+      {/* White rounded background that follows the hovered row (shared layout). */}
+      <AnimatePresence initial={false}>
+        {showCard && (
+          <motion.div
+            layoutId="sidebar-pill"
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 z-0 rounded-2xl bg-white shadow-[0_12px_28px_rgba(0,0,0,0.35)]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={pillTransition}
+          />
+        )}
+      </AnimatePresence>
+
       <Link
         href={href}
         prefetch={false}
-        className="group relative block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-neutral-700"
+        className="group relative z-10 block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-neutral-700"
         onPointerEnter={() => (external ? onEnterExternal?.() : onEnterInternal())}
         onFocus={() => (external ? onEnterExternal?.() : onEnterInternal())}
         target={external ? "_blank" : undefined}
@@ -84,7 +120,7 @@ export default function HoverCardRow({
                 transition={
                   reduceMotion
                     ? { duration: 0 }
-                    : { type: "tween", duration: 0.30, ease: EASE_IOS }
+                    : { type: "tween", duration: 0.3, ease: EASE_IOS }
                 }
               />
             </span>
@@ -97,25 +133,30 @@ export default function HoverCardRow({
           )}
         </div>
 
-        {/* expanded content (same form), slower + steadier */}
-        <div
-          className="overflow-hidden"
-          style={{
-            maxHeight: showCard ? MAX_PREVIEW_H : 0,
-            opacity: showCard ? 1 : 0,
-            transition: reduceMotion
-              ? "none"
-              : `max-height ${Math.round(dur * 1000)}ms cubic-bezier(${EASE_IOS.join(",")}), opacity 180ms linear`,
-          }}
-          aria-hidden={!showCard}
-        >
-          <div className="px-3 pb-3 pt-0.5">
-            <div className="line-clamp-2 text-xs leading-relaxed text-black/80">
-              {blurb}
-            </div>
-          </div>
-        </div>
+        {/* expanded content: measured height animation (no max-height artifacts) */}
+        <AnimatePresence initial={false}>
+          {showCard && (
+            <motion.div
+              key="preview"
+              className="overflow-hidden"
+              initial={reduceMotion ? { height: "auto", opacity: 1 } : { height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={
+                reduceMotion
+                  ? { duration: 0 }
+                  : { type: "tween", duration: 0.22, ease: EASE_IOS }
+              }
+            >
+              <div className="px-3 pb-3 pt-0.5">
+                <div className="line-clamp-2 text-xs leading-relaxed text-black/80">
+                  {blurb}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </Link>
-    </div>
+    </motion.div>
   );
 }
