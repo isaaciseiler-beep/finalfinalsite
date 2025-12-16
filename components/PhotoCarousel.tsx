@@ -1,7 +1,7 @@
 // components/PhotoCarousel.tsx — DROP-IN REPLACEMENT
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import Image from "next/image";
 import { useState } from "react";
 
@@ -72,6 +72,7 @@ function loadOrCreateSelection(): number[] {
 
 export default function PhotoCarousel() {
   const [hovered, setHovered] = useState(false);
+  const reduce = useReducedMotion();
 
   // randomize once per session (first mount); persist via sessionStorage; no reshuffle on re-render
   const [photos] = useState(() => {
@@ -87,8 +88,8 @@ export default function PhotoCarousel() {
   return (
     <section
       className="h-full w-full"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
     >
       <div className="relative flex h-full w-full items-center justify-center bg-black">
         {/* inner square with buffer to pane edges */}
@@ -100,35 +101,39 @@ export default function PhotoCarousel() {
 
               const base = { x: 0, y: 0, rotate: preset.rotate };
 
-              const jitter = hovered
-                ? {
-                    x: (i % 2 === 0 ? 1 : -1) * 10,
-                    y: (i % 3 === 0 ? -1 : 1) * 9,
-                    rotate:
-                      preset.rotate + (i === 0 ? 5 : i % 2 === 0 ? 7 : -6),
-                  }
-                : base;
+              const jitter =
+                hovered && !reduce
+                  ? {
+                      x: (i % 2 === 0 ? 1 : -1) * 10,
+                      y: (i % 3 === 0 ? -1 : 1) * 9,
+                      rotate:
+                        preset.rotate + (i === 0 ? 5 : i % 2 === 0 ? 7 : -6),
+                    }
+                  : base;
 
               return (
                 <motion.div
                   key={photo.id}
                   className={[
                     "absolute aspect-square w-[44%] sm:w-[40%] md:w-[38%] lg:w-[36%]",
-                    "overflow-hidden rounded-3xl", // rounded corners
-                    "shadow-[0_22px_55px_rgba(0,0,0,0.72)]", // no border; softer/lusher
+                    "overflow-hidden rounded-3xl",
+                    "shadow-[0_22px_55px_rgba(0,0,0,0.72)]",
+                    "will-change-transform",
                   ].join(" ")}
                   style={{
                     top: `${preset.top}%`,
                     left: `${preset.left}%`,
                     zIndex: preset.z,
+                    backfaceVisibility: "hidden",
+                    transformStyle: "preserve-3d",
                   }}
                   initial={base}
                   animate={jitter}
                   transition={{
                     type: "spring",
-                    stiffness: 90,
-                    damping: 27,
-                    mass: 0.85,
+                    stiffness: 70,
+                    damping: 30,
+                    mass: 1.05,
                   }}
                 >
                   <Image
@@ -156,34 +161,47 @@ export default function PhotoCarousel() {
             }
             transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
           >
-            {/* soft vignette behind text to avoid "square gradient" look */}
             <div className="relative">
+              {/* smooth vignette (no blur filter → no rectangular “box”) */}
               <div
                 aria-hidden="true"
-                className="pointer-events-none absolute left-1/2 top-1/2 h-[11.5rem] w-[34rem] -translate-x-1/2 -translate-y-1/2 rounded-full"
+                className="pointer-events-none absolute left-1/2 top-1/2 h-[18rem] w-[60rem] -translate-x-1/2 -translate-y-1/2 rounded-full"
                 style={{
                   background:
-                    "radial-gradient(closest-side, rgba(0,0,0,0.78), rgba(0,0,0,0.0))",
-                  filter: "blur(10px)",
+                    "radial-gradient(ellipse at center, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.45) 38%, rgba(0,0,0,0.0) 72%)",
                 }}
               />
-              <motion.span
-                className="relative text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-normal tracking-tight text-white"
-                style={{
-                  // softer + less defined than before
-                  textShadow:
-                    "0 10px 40px rgba(0,0,0,0.75), 0 2px 16px rgba(0,0,0,0.65)",
-                }}
-                initial={{ clipPath: "inset(0 100% 0 0)" }}
-                animate={
-                  hovered
-                    ? { clipPath: "inset(0 0 0 0)" }
-                    : { clipPath: "inset(0 100% 0 0)" }
-                }
-                transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-              >
-                Check out my photos
-              </motion.span>
+
+              {/* Two-layer text: wipe (top) + shadow-only (bottom) */}
+              <div className="relative inline-block">
+                <motion.span
+                  aria-hidden
+                  className="absolute inset-0 text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-normal tracking-tight text-transparent"
+                  style={{
+                    textShadow:
+                      "0 10px 40px rgba(0,0,0,0.75), 0 2px 16px rgba(0,0,0,0.65)",
+                  }}
+                  initial={false}
+                  animate={hovered ? { opacity: 1 } : { opacity: 0 }}
+                  transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  Check out my photos
+                </motion.span>
+
+                <motion.span
+                  className="relative text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-normal tracking-tight text-white"
+                  style={{ willChange: "clip-path" }}
+                  initial={{ clipPath: "inset(0 100% 0 0)" }}
+                  animate={
+                    hovered
+                      ? { clipPath: "inset(0 0 0 0)" }
+                      : { clipPath: "inset(0 100% 0 0)" }
+                  }
+                  transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  Check out my photos
+                </motion.span>
+              </div>
             </div>
           </motion.div>
         </div>
@@ -191,3 +209,4 @@ export default function PhotoCarousel() {
     </section>
   );
 }
+
