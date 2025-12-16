@@ -1,11 +1,18 @@
-// components/BrandMark.tsx — DROP-IN REPLACEMENT (same look, less bounce)
+// components/BrandMark.tsx — DROP-IN REPLACEMENT (same look, less lag)
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { usePathname } from "next/navigation";
 
-export const BRAND_SPRING = { type: "spring", stiffness: 180, damping: 30 };
+// Slightly snappier so the toggle button "tracks" the logo width sooner.
+export const BRAND_SPRING = {
+  type: "spring",
+  stiffness: 260,
+  damping: 34,
+  mass: 0.7,
+} as const;
+
 const THRESHOLD_PX = 80;
 
 function useMidScrollCollapse(thresholdPx = THRESHOLD_PX) {
@@ -15,13 +22,18 @@ function useMidScrollCollapse(thresholdPx = THRESHOLD_PX) {
     return window.scrollY > thresholdPx;
   });
 
+  // Re-evaluate on route changes (keeps behavior consistent across pages).
   useEffect(() => {
     const y = typeof window !== "undefined" ? window.scrollY : 0;
     setCollapsed(y > thresholdPx);
   }, [pathname, thresholdPx]);
 
+  // Only update state when the boolean actually flips (reduces scroll work).
   useEffect(() => {
-    const onScroll = () => setCollapsed(window.scrollY > thresholdPx);
+    const onScroll = () => {
+      const next = window.scrollY > thresholdPx;
+      setCollapsed((prev) => (prev === next ? prev : next));
+    };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, [thresholdPx]);
@@ -71,6 +83,7 @@ export default function BrandMark() {
       transition={{ width: BRAND_SPRING }}
     >
       <span className="relative block h-[1.1em]">
+        {/* invisible measurers */}
         <span ref={fullRef} className="invisible absolute left-0 top-0" aria-hidden>
           Isaac Seiler
         </span>
@@ -78,21 +91,23 @@ export default function BrandMark() {
           IIS
         </span>
 
+        {/* full wordmark */}
         <motion.span
           className="absolute left-0 top-0"
           initial={false}
           animate={{ opacity: collapsed ? 0 : 1, x: collapsed ? -6 : 0 }}
-          transition={{ duration: 0.22 }}
+          transition={{ duration: 0.18 }}
           style={{ pointerEvents: "none" }}
         >
           Isaac Seiler
         </motion.span>
 
+        {/* collapsed monogram */}
         <motion.span
           className="absolute left-0 top-0"
           initial={false}
           animate={{ opacity: collapsed ? 1 : 0, x: collapsed ? 0 : -6 }}
-          transition={{ duration: 0.2 }}
+          transition={{ duration: 0.16 }}
           style={{ pointerEvents: "none" }}
         >
           IIS
@@ -101,4 +116,3 @@ export default function BrandMark() {
     </motion.span>
   );
 }
-
