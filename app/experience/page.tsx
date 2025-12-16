@@ -141,7 +141,7 @@ export default function ExperiencePage() {
     // +CARD_GAP so exact-fit math behaves well
     return Math.max(
       1,
-      Math.floor((viewportW + CARD_GAP) / (CARD_WIDTH + CARD_GAP))
+      Math.floor((viewportW + CARD_GAP) / (CARD_WIDTH + CARD_GAP)),
     );
   }, [viewportW]);
 
@@ -176,17 +176,8 @@ export default function ExperiencePage() {
       <div className="-mx-4 sm:-mx-6">
         {/* reintroduce inner padding for readable layout */}
         <div className="px-4 sm:px-6 pt-[112px] md:pt-[112px]">
-          {/* header */}
-          <section className="relative min-h-[18vh] pb-3 md:pb-4">
-            <div className="flex justify-end">
-              <h1 className="text-right text-5xl font-normal leading-none tracking-tight md:text-7xl">
-                Experience
-              </h1>
-            </div>
-          </section>
-
-          {/* education pill */}
-          <section className="mb-6 flex flex-col gap-4 md:mb-7">
+          {/* education header + popup (replaces Experience header) */}
+          <section className="pb-4 md:pb-5">
             <EducationPopup
               open={eduOpen}
               onToggle={() => setEduOpen((v) => !v)}
@@ -304,7 +295,7 @@ export default function ExperiencePage() {
             </div>
           </section>
 
-          {/* resume (expanded only; slimmer spacing; no switch; no card mode) */}
+          {/* resume (expanded only; no switch; no card mode) */}
           <section aria-label="resume" className="relative">
             <div className="relative pt-1">
               <Suspense
