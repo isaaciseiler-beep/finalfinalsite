@@ -98,6 +98,17 @@ function isValidLatLng(lat: number, lng: number) {
   return true;
 }
 
+// r2 keys are case-sensitive; try common extensions before excluding a photo.
+const EXT_CANDIDATES = [".JPG", ".jpg", ".jpeg", ".JPEG"] as const;
+
+function hasRealLocation(p: Pick<PhotoMeta, "locationLabel">) {
+  return !isHoldText(p.locationLabel);
+}
+
+function buildR2Src(id: string, ext: (typeof EXT_CANDIDATES)[number]) {
+  return `${R2_BASE_URL}/${id}${ext}`;
+}
+
 // ---------- overrides (unchanged) ----------
 
 const photoOverrides: Record<string, Partial<PhotoMeta>> = {
@@ -1048,17 +1059,33 @@ const photoOverrides: Record<string, Partial<PhotoMeta>> = {
   },
 };
 
-const photos: PhotoMeta[] = Array.from({ length: PHOTO_COUNT }, (_, i) => {
+// Build the photo list from the highest index we know about.
+// We *exclude as few as possible* while guaranteeing:
+// - no blank photos (we retry common extensions on error)
+// - every rendered photo has a non-placeholder location pill
+const MAX_INDEX = Math.max(
+  PHOTO_COUNT,
+  ...Object.keys(photoOverrides).map((k) => Number(k.split("_")[1]) || 0),
+);
+
+const photos: PhotoMeta[] = Array.from({ length: MAX_INDEX }, (_, i) => {
   const index = i + 1;
   const id = `image_${index}`;
-  const override = photoOverrides[id] ?? {};
+  const override = photoOverrides[id];
+
+  // If there's no override (or it's placeholder), we don't have a location pill.
+  // Exclude to satisfy "no photos without location tabs".
+  const locationLabel = (override?.locationLabel as string | undefined) ?? "hold";
+  if (!override || isHoldText(locationLabel)) return null;
+
   return {
     ...basePhoto,
     id,
-    src: `${R2_BASE_URL}/image_${index}.JPG`,
+    src: buildR2Src(id, EXT_CANDIDATES[0]),
     ...override,
+    locationLabel,
   };
-});
+}).filter(Boolean) as PhotoMeta[];
 
 // ---------- helpers ----------
 const regionLabels: Record<Region, string> = {
@@ -1111,6 +1138,13 @@ function WindowFrame({
   onImageError: (id: string) => void;
 }) {
   const sectionRef = useRef<HTMLDivElement | null>(null);
+  const [src, setSrc] = useState(() => buildR2Src(photo.id, EXT_CANDIDATES[0]));
+  const extIdxRef = useRef(0);
+
+  useEffect(() => {
+    extIdxRef.current = 0;
+    setSrc(buildR2Src(photo.id, EXT_CANDIDATES[0]));
+  }, [photo.id]);
 
   const { scrollYProgress } = useScroll({
     target: sectionRef,
@@ -1164,7 +1198,7 @@ function WindowFrame({
               className="absolute inset-0 will-change-transform"
             >
               <Image
-                src={photo.src}
+                src={src}
                 alt={photo.alt}
                 priority={isPriority}
                 placeholder="blur"
@@ -1173,7 +1207,15 @@ function WindowFrame({
                 sizes={FLEX_SIZES}
                 quality={80}
                 className="object-cover"
-                onError={() => onImageError(photo.id)}
+                onError={() => {
+                  const nextIdx = extIdxRef.current + 1;
+                  if (nextIdx < EXT_CANDIDATES.length) {
+                    extIdxRef.current = nextIdx;
+                    setSrc(buildR2Src(photo.id, EXT_CANDIDATES[nextIdx]));
+                    return;
+                  }
+                  onImageError(photo.id);
+                }}
               />
             </motion.div>
           </motion.div>
@@ -1208,6 +1250,13 @@ function GridPhotoCard({
   const gridClass = layoutClasses[computeLayoutVariant(photo, index0)];
   const isPriority = index0 < 14 || windowIndices.has(index0);
   const showLocation = !isHoldText(photo.locationLabel);
+  const [src, setSrc] = useState(() => buildR2Src(photo.id, EXT_CANDIDATES[0]));
+  const extIdxRef = useRef(0);
+
+  useEffect(() => {
+    extIdxRef.current = 0;
+    setSrc(buildR2Src(photo.id, EXT_CANDIDATES[0]));
+  }, [photo.id]);
 
   return (
     <motion.div
@@ -1221,7 +1270,7 @@ function GridPhotoCard({
       <div className="w-full">
         <div className="relative aspect-[16/9] overflow-hidden rounded-3xl bg-black">
           <Image
-            src={photo.src}
+            src={src}
             alt={photo.alt}
             priority={isPriority}
             placeholder="blur"
@@ -1234,7 +1283,15 @@ function GridPhotoCard({
             }
             quality={80}
             className="h-full w-full object-cover"
-            onError={() => onImageError(photo.id)}
+            onError={() => {
+              const nextIdx = extIdxRef.current + 1;
+              if (nextIdx < EXT_CANDIDATES.length) {
+                extIdxRef.current = nextIdx;
+                setSrc(buildR2Src(photo.id, EXT_CANDIDATES[nextIdx]));
+                return;
+              }
+              onImageError(photo.id);
+            }}
           />
           {showLocation && (
             <div className="pointer-events-none absolute inset-x-3 bottom-3 flex justify-end">
@@ -1277,10 +1334,10 @@ function MapPanel({ photos, visible, onSelectPhoto }: MapPanelProps) {
 
   const geotagged = useMemo(() => {
     return photos.filter((p) => {
-      // allow (0,0) only if it doesn't look like placeholder data
+      // Only plot real geotags.
       if (!isValidLatLng(p.latitude, p.longitude)) return false;
-      if (p.latitude === 0 && p.longitude === 0 && isHoldText(p.locationLabel)) return false;
-      return true;
+      if (p.latitude === 0 && p.longitude === 0) return false;
+      return !isHoldText(p.locationLabel);
     });
   }, [photos]);
 
