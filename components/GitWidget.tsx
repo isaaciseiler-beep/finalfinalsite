@@ -4,7 +4,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Github, ExternalLink } from "lucide-react";
+import { Github } from "lucide-react";
 
 type Props = {
   repoUrl: string;
@@ -39,7 +39,7 @@ export default function GitWidget({ repoUrl, stars }: Props) {
   const [weeks, setWeeks] = React.useState<CommitActivityWeek[] | null>(null);
   const [loading, setLoading] = React.useState(false);
 
-  // hook-safe: always called
+  // always available, deterministic fallback so the grid always renders
   const fallbackWeeks = React.useMemo(() => buildFallbackWeeks(repoUrl), [repoUrl]);
 
   React.useEffect(() => {
@@ -67,13 +67,10 @@ export default function GitWidget({ repoUrl, stars }: Props) {
         if (!cancelled && typeof json?.stargazers_count === "number") {
           setRepoStars(json.stargazers_count);
         }
-      } catch {
-        // ignore
-      }
+      } catch {}
     };
 
     const fetchCommitActivity = async () => {
-      // github stats endpoint is flaky (202/403); we try briefly and then fall back.
       const started = Date.now();
       const timeoutMs = 6500;
 
@@ -86,6 +83,7 @@ export default function GitWidget({ repoUrl, stars }: Props) {
             { cache: "no-store" }
           );
 
+          // github often returns 202 while computing; try briefly then fall back
           if (res.status === 202) {
             if (Date.now() - started < timeoutMs) {
               setTimeout(poll, 900);
@@ -124,26 +122,23 @@ export default function GitWidget({ repoUrl, stars }: Props) {
   const value = "text-base sm:text-lg font-semibold leading-snug text-neutral-950";
   const pill =
     "inline-flex items-center justify-center rounded-full bg-black/20 px-4 py-2 text-sm font-medium text-neutral-950 hover:bg-black/25";
-  const sub = "text-sm text-neutral-950/70";
-  const footerText = "text-sm text-neutral-950/80";
 
-  const showLive = !!weeks && weeks.length > 0;
-  const commitData = showLive ? weeks! : fallbackWeeks;
+  // matches copyright style exactly
+  const copyright = "text-sm text-white/80";
+  const popupFooterText = "text-sm text-neutral-950/80";
+
+  const data = weeks && weeks.length > 0 ? weeks : fallbackWeeks;
 
   return (
     <div className="relative">
-      {/* footer trigger (adds context) */}
+      {/* footer trigger */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-2 text-sm text-neutral-100 hover:underline underline-offset-4"
-        aria-haspopup="dialog"
-        aria-expanded={open}
+        className="inline-flex items-center gap-2 px-0 py-0 text-sm text-neutral-100 hover:underline underline-offset-4 focus:outline-none"
       >
         <Github className="h-4 w-4 opacity-90" />
-        <span className="text-xs font-medium tracking-tight">
-          github · source & commits
-        </span>
+        <span className="text-xs font-medium tracking-tight">Built with Github</span>
       </button>
 
       <AnimatePresence initial={false}>
@@ -165,31 +160,15 @@ export default function GitWidget({ repoUrl, stars }: Props) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 14 }}
               transition={pop}
-              role="dialog"
-              aria-modal="true"
             >
               <div className="w-full">
                 {/* bottom sheet (top corners only) */}
                 <div className="rounded-t-3xl bg-[#aa96af] shadow-[0_18px_45px_rgba(0,0,0,0.35)]">
-                  {/* header with context */}
-                  <div className="flex items-start justify-between gap-4 px-5 pt-5 pb-4">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 text-neutral-950">
-                        <Github className="h-5 w-5 opacity-90" />
-                        <div className="text-sm font-semibold">source</div>
-                      </div>
-                      <div className={`mt-1 ${sub}`}>
-                        repo link + recent commit activity (52 weeks)
-                      </div>
-                    </div>
-
-                    <Link
-                      href={repoUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={pill}
-                    >
-                      Open Repository <ExternalLink className="ml-2 h-4 w-4 opacity-80" />
+                  {/* header */}
+                  <div className="flex items-center justify-between px-5 pt-5 pb-4">
+                    <Github className="h-5 w-5 text-neutral-950/90" />
+                    <Link href={repoUrl} target="_blank" className={pill}>
+                      Open Repository
                     </Link>
                   </div>
 
@@ -201,87 +180,54 @@ export default function GitWidget({ repoUrl, stars }: Props) {
                     animate="show"
                   >
                     <div className="grid gap-4 sm:grid-cols-2">
-                      {/* repo */}
                       <motion.div variants={item} className="rounded-2xl bg-white/35 p-4">
                         <div className={label}>Repository</div>
                         <div className={`${value} mt-2`}>
                           isaaciseiler-beep / finalfinalsite
                         </div>
-                        <div className="mt-2 text-sm text-neutral-950/65 break-words">
-                          {stripTree(repoUrl)}
-                        </div>
                       </motion.div>
 
-                      {/* stars, but icon is OpenAI logo per request */}
                       <motion.div variants={item} className="rounded-2xl bg-white/35 p-4">
                         <div className={label}>Stars</div>
                         <div className="mt-2 flex items-center gap-2">
-                          <OpenAIMark className="h-4 w-4 text-neutral-950/80" />
-                          <span className={value}>
+                          <span className={`${value}`}>
                             {typeof repoStars === "number" ? repoStars.toLocaleString() : "—"}
                           </span>
                         </div>
-                        <div className="mt-2 text-sm text-neutral-950/65">
-                          github stargazers count
-                        </div>
                       </motion.div>
 
-                      {/* commits (wide layout that makes sense on long windows) */}
+                      {/* commits: smaller centered housing */}
                       <motion.div
                         variants={item}
                         className="rounded-2xl bg-white/35 p-4 sm:col-span-2"
                       >
                         <div className={label}>Commits</div>
 
-                        <div className="mt-3 grid gap-4 lg:grid-cols-[auto_1fr] lg:items-start">
-                          {/* grid stays natural width; scroll if needed */}
-                          <div className="max-w-full overflow-x-auto">
-                            <CommitGrid weeks={commitData} />
+                        <div className="mt-3">
+                          <div className="mx-auto w-full max-w-[640px] rounded-2xl bg-black/10 p-4">
+                            <CommitGrid weeks={data} />
                           </div>
 
-                          {/* fills the “extra” width on long sheets */}
-                          <div className="rounded-2xl bg-black/10 p-4 text-sm text-neutral-950/75">
-                            <div className="font-medium text-neutral-950/85">
-                              about this grid
+                          {loading && (!weeks || weeks.length === 0) ? (
+                            <div className="mt-2 text-xs text-neutral-950/60 text-center">
+                              loading…
                             </div>
-                            <ul className="mt-2 space-y-1">
-                              <li>shows 52 weeks (sunday–saturday)</li>
-                              <li>darker = more commits</li>
-                              <li>
-                                {showLive
-                                  ? "live github stats loaded"
-                                  : loading
-                                  ? "github stats still computing; showing fallback"
-                                  : "github api unavailable; showing fallback"}
-                              </li>
-                            </ul>
-                          </div>
+                          ) : null}
                         </div>
                       </motion.div>
                     </div>
 
-                    {/* footer */}
-                    <motion.div
-                      variants={item}
-                      className={`mt-5 flex items-center justify-center gap-3 ${footerText}`}
-                    >
-                      <span className="inline-flex items-center gap-2">
-                        <span className="inline-flex h-4 w-4 items-center justify-center text-neutral-950/80">
-                          <SparkleDot />
-                        </span>
-                        <span>Built with GPT 5, GPT 5.1, and GPT 5.2</span>
-                      </span>
-                      <span className="opacity-50">•</span>
-                      <span className="inline-flex items-center gap-2">
-                        <img
-                          src="https://cdn.simpleicons.org/vercel/000000"
-                          alt="Vercel"
-                          width={14}
-                          height={14}
-                          className="opacity-80"
-                        />
-                        <span>Launched with Vercel</span>
-                      </span>
+                    {/* popup footer: button styled like copyright (same size/color, icon same color) */}
+                    <motion.div variants={item} className="mt-5 flex justify-center">
+                      <Link
+                        href={repoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`inline-flex items-center gap-2 ${popupFooterText} hover:underline underline-offset-4`}
+                      >
+                        <Github className="h-4 w-4 text-neutral-950/80" />
+                        <span>Built with Github</span>
+                      </Link>
                     </motion.div>
                   </motion.div>
                 </div>
@@ -294,14 +240,7 @@ export default function GitWidget({ repoUrl, stars }: Props) {
   );
 }
 
-function stripTree(url: string) {
-  try {
-    const u = new URL(url);
-    return `https://github.com${u.pathname.replace(/\/tree\/.+$/, "")}`;
-  } catch {
-    return url;
-  }
-}
+/* helpers */
 
 function parseOwnerRepo(url: string) {
   try {
@@ -346,63 +285,25 @@ function CommitGrid({ weeks }: { weeks: CommitActivityWeek[] }) {
   );
 
   return (
-    <div className="inline-flex flex-col gap-[3px]">
-      {rows.map((row, rowIdx) => (
-        <div key={rowIdx} className="inline-flex gap-[3px]">
-          {row.map((count, colIdx) => (
-            <span
-              key={`${rowIdx}-${colIdx}`}
-              className={`h-[10px] w-[10px] rounded-[2px] ${cellBg(level(count))}`}
-              title={`${count} commit${count === 1 ? "" : "s"}`}
-            />
-          ))}
-        </div>
-      ))}
+    <div className="max-w-full overflow-x-auto">
+      <div className="inline-flex flex-col gap-[3px]">
+        {rows.map((row, rowIdx) => (
+          <div key={rowIdx} className="inline-flex gap-[3px]">
+            {row.map((count, colIdx) => (
+              <span
+                key={`${rowIdx}-${colIdx}`}
+                className={`h-[10px] w-[10px] rounded-[2px] ${cellBg(level(count))}`}
+                title={`${count} commit${count === 1 ? "" : "s"}`}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
-/**
- * openai “logo” mark: uses simpleicons (with fallback text if it fails)
- * (your prior openai icon intermittently failed; this degrades gracefully)
- */
-function OpenAIMark({ className }: { className?: string }) {
-  const [ok, setOk] = React.useState(true);
-
-  if (!ok) {
-    return (
-      <span className={className} aria-label="OpenAI">
-        AI
-      </span>
-    );
-  }
-
-  return (
-    <img
-      src="https://cdn.simpleicons.org/openai/000000"
-      alt="OpenAI"
-      width={16}
-      height={16}
-      className={className}
-      onError={() => setOk(false)}
-    />
-  );
-}
-
-function SparkleDot() {
-  // small neutral glyph; inherits currentColor
-  return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M12 2l1.2 5.2L18 9l-4.8 1.8L12 16l-1.2-5.2L6 9l4.8-1.8L12 2z"
-        fill="currentColor"
-        opacity="0.9"
-      />
-    </svg>
-  );
-}
-
-/* deterministic fallback weeks (always renders) */
+/* deterministic fallback weeks so the grid always renders */
 function buildFallbackWeeks(repoUrl: string): CommitActivityWeek[] {
   const now = new Date();
   const startOfWeek = new Date(now);
@@ -414,6 +315,7 @@ function buildFallbackWeeks(repoUrl: string): CommitActivityWeek[] {
 
   const weeks: CommitActivityWeek[] = [];
   const weekCount = 52;
+
   const burstCenters = Array.from({ length: 4 }, () => Math.floor(rand() * weekCount));
 
   for (let i = weekCount - 1; i >= 0; i--) {
