@@ -282,4 +282,3 @@ export default function Sidebar() {
     </AnimatePresence>
   );
 }
-
