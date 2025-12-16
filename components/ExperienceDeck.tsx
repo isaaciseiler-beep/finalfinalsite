@@ -14,6 +14,11 @@ import Image from "next/image";
 type Props = {
   mode: "cards" | "timeline";
   fanOutKey?: string;
+
+  // kept for compatibility with existing callers (e.g. ExperienceTimeline.tsx)
+  // not used because you requested no year filters and reverse-chrono display
+  activeYear?: string;
+  onActiveYearChange?: (year: string) => void;
 };
 
 const GAP = 16; // gap-4
@@ -178,12 +183,14 @@ function ResumePhotoCarousel({ photos }: { photos: ExperiencePhoto[] }) {
 
   return (
     <div className="relative overflow-x-hidden">
-      {/* side fades */}
       <div className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-background via-background/70 to-transparent sm:w-12" />
       <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-background via-background/70 to-transparent sm:w-12" />
 
-      {/* lock browser horizontal panning; arrows handle navigation */}
-      <div ref={viewportRef} className="overflow-hidden" style={{ touchAction: "pan-y" }}>
+      <div
+        ref={viewportRef}
+        className="overflow-hidden"
+        style={{ touchAction: "pan-y" }}
+      >
         <motion.div
           className="flex gap-4"
           animate={{ x: -index * step }}
@@ -195,7 +202,6 @@ function ResumePhotoCarousel({ photos }: { photos: ExperiencePhoto[] }) {
               ref={i === 0 ? firstCardRef : undefined}
               className="flex-shrink-0 w-[88%] max-w-[980px] sm:w-[72%] lg:w-[62%] 2xl:w-[56%]"
             >
-              {/* 16:9 everywhere */}
               <article className="aspect-video w-full overflow-hidden rounded-2xl bg-card shadow-[0_0_20px_rgba(0,0,0,0.35)]">
                 <div className="relative h-full w-full">
                   <Image
@@ -205,10 +211,8 @@ function ResumePhotoCarousel({ photos }: { photos: ExperiencePhoto[] }) {
                     className="object-cover"
                     sizes="100vw"
                   />
-                  {/* narrower bottom gradient */}
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
                   <div className="absolute inset-x-0 bottom-0 p-3 md:p-4">
-                    {/* caption ~20% bigger */}
                     <p className="text-sm leading-snug text-neutral-50 md:text-base">
                       {renderCaption(p.caption)}
                     </p>
@@ -224,7 +228,11 @@ function ResumePhotoCarousel({ photos }: { photos: ExperiencePhoto[] }) {
         <div className="mt-4 flex items-center justify-between text-xs text-muted">
           <div className="flex items-center gap-2">
             <CarouselNavButton dir="left" onClick={goPrev} disabled={!canPrev} />
-            <CarouselNavButton dir="right" onClick={goNext} disabled={!canNext} />
+            <CarouselNavButton
+              dir="right"
+              onClick={goNext}
+              disabled={!canNext}
+            />
           </div>
           <span className="tabular-nums">
             {index + 1} / {count}
@@ -281,6 +289,7 @@ function PressHitCircle({
       style={{ touchAction: "pan-y" }}
       aria-label={`${publisher}: ${title}`}
     >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={src}
         alt={title}
@@ -291,7 +300,6 @@ function PressHitCircle({
         }}
       />
 
-      {/* always-on story-style overlays */}
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
 
       <div className="pointer-events-none absolute inset-x-0 top-0 p-3">
