@@ -4,9 +4,11 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowUpRight } from "lucide-react";
 
+// ios-ish (intentional, no bounce)
 const EASE_IOS: [number, number, number, number] = [0.2, 0.0, 0.0, 1.0];
 
 export type HoverCardRowProps = {
+  rowRef?: React.RefCallback<HTMLDivElement>;
   href: string;
   label: string;
   active: boolean;
@@ -17,11 +19,12 @@ export type HoverCardRowProps = {
   blurb?: string;
   onEnterInternal: () => void;
   onEnterExternal?: () => void;
-  onLeaveAll: () => void; // kept for compatibility (not used here)
+  onLeaveAll: () => void; // kept for compatibility (sidebar handles leave)
   reduceMotion: boolean;
 };
 
 export default function HoverCardRow({
+  rowRef,
   href,
   label,
   active,
@@ -34,31 +37,18 @@ export default function HoverCardRow({
 }: HoverCardRowProps) {
   const showCard = open && !external;
 
-  const pillTransition = reduceMotion
-    ? { duration: 0 }
-    : { type: "tween" as const, duration: 0.18, ease: EASE_IOS };
+  // slightly slower + more intentional than before
+  const dur = reduceMotion ? 0 : 0.26;
 
-  // 2-line blurb + padding fits comfortably under this ceiling
+  // 2-line blurb container ceiling (stable)
   const MAX_PREVIEW_H = 84;
 
   return (
-    <div className="relative overflow-visible bg-black">
-      {/* white rounded background that GLIDES between rows (no bounce) */}
-      {showCard && (
-        <motion.div
-          layoutId="hovercard-bg"
-          className="pointer-events-none absolute inset-0 z-0 rounded-2xl bg-white shadow-[0_12px_28px_rgba(0,0,0,0.35)]"
-          transition={pillTransition}
-          style={{ willChange: "transform" }}
-        />
-      )}
-
+    <div ref={rowRef} className="relative z-10 overflow-visible bg-black">
       <Link
         href={href}
-        // Optional perf tweak: prevents prefetch work from competing with hover animation.
-        // If you prefer default prefetching, remove this prop.
         prefetch={false}
-        className="group relative z-10 block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-neutral-700"
+        className="group relative block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-neutral-700"
         onPointerEnter={() => (external ? onEnterExternal?.() : onEnterInternal())}
         onFocus={() => (external ? onEnterExternal?.() : onEnterInternal())}
         target={external ? "_blank" : undefined}
@@ -86,7 +76,6 @@ export default function HoverCardRow({
           ) : (
             <span className="relative font-normal">
               {label}
-              {/* underline for active/hover */}
               <motion.span
                 className="pointer-events-none absolute -bottom-[2px] left-0 h-px w-full bg-current"
                 style={{ transformOrigin: "left" }}
@@ -95,7 +84,7 @@ export default function HoverCardRow({
                 transition={
                   reduceMotion
                     ? { duration: 0 }
-                    : { type: "tween", duration: 0.22, ease: EASE_IOS }
+                    : { type: "tween", duration: 0.30, ease: EASE_IOS }
                 }
               />
             </span>
@@ -108,7 +97,7 @@ export default function HoverCardRow({
           )}
         </div>
 
-        {/* expanded content: stable, no bounce, expands DOWN */}
+        {/* expanded content (same form), slower + steadier */}
         <div
           className="overflow-hidden"
           style={{
@@ -116,7 +105,7 @@ export default function HoverCardRow({
             opacity: showCard ? 1 : 0,
             transition: reduceMotion
               ? "none"
-              : `max-height 200ms cubic-bezier(${EASE_IOS.join(",")}), opacity 120ms linear`,
+              : `max-height ${Math.round(dur * 1000)}ms cubic-bezier(${EASE_IOS.join(",")}), opacity 180ms linear`,
           }}
           aria-hidden={!showCard}
         >
