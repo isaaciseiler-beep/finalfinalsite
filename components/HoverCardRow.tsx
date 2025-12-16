@@ -1,5 +1,9 @@
-// components/HoverCardRow.tsx  ← REPLACE
+// components/HoverCardRow.tsx
+// Smoother hover behavior:
+// - No expanding/collapsing row height (prevents the list from "sliding" around)
+// - Shared layout highlight + shared layout preview panel that glides between items
 "use client";
+
 import * as React from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -19,6 +23,7 @@ export type HoverCardRowProps = {
   blurb?: string;
   onEnterInternal: () => void;
   onEnterExternal?: () => void;
+  // kept for API-compatibility with your Sidebar (not needed with the new hover logic)
   onLeaveAll: () => void;
   reduceMotion: boolean;
 };
@@ -29,32 +34,38 @@ export default function HoverCardRow({
   active,
   external,
   open,
+  badge,
+  title,
   blurb,
   onEnterInternal,
   onEnterExternal,
-  onLeaveAll,
   reduceMotion,
 }: HoverCardRowProps) {
-  const showCard = open && !external;
+  const show = open && !external;
+
+  const layoutTransition = reduceMotion
+    ? { duration: 0.12 }
+    : { duration: 0.36, ease: EASE_DECEL };
+
+  const previewTransition = reduceMotion
+    ? { duration: 0.12 }
+    : { duration: 0.28, ease: EASE_DECEL };
 
   return (
     <motion.div
       className="relative overflow-visible bg-black"
-      onMouseEnter={() => (external ? undefined : onEnterInternal())}
-      onMouseLeave={onLeaveAll}
+      onPointerEnter={() => (external ? onEnterExternal?.() : onEnterInternal())}
     >
-      {/* white rounded background on hover/open */}
+      {/* shared white rounded highlight that glides between rows */}
       <AnimatePresence initial={false}>
-        {showCard && (
+        {show && (
           <motion.div
-            layoutId="hovercard-bg"
+            layoutId="sidebar-hover-bg"
             className="pointer-events-none absolute inset-0 z-0 rounded-2xl bg-white shadow-[0_12px_28px_rgba(0,0,0,0.35)]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={
-              reduceMotion ? { duration: 0.16 } : { duration: 0.32, ease: EASE_DECEL }
-            }
+            transition={layoutTransition}
           />
         )}
       </AnimatePresence>
@@ -62,23 +73,21 @@ export default function HoverCardRow({
       <Link
         href={href}
         className="group relative z-10 block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-neutral-700"
-        onMouseEnter={() => (external ? onEnterExternal?.() : onEnterInternal())}
         onFocus={() => (external ? onEnterExternal?.() : onEnterInternal())}
         target={external ? "_blank" : undefined}
         rel={external ? "noopener noreferrer" : undefined}
         aria-expanded={open}
         style={{ textDecoration: "none" }}
       >
-        {/* header row */}
         <div
-          className={`flex items-center justify-between px-3 py-2 text-sm ${
-            showCard
+          className={
+            "flex items-center justify-between px-3 py-2 text-sm transition-colors duration-200 " +
+            (show
               ? "text-black"
               : active
                 ? "text-white font-medium"
-                : "text-fg hover:text-white"
-          }`}
-          style={{ textDecoration: "none" }}
+                : "text-fg hover:text-white")
+          }
         >
           {external ? (
             <span
@@ -96,7 +105,9 @@ export default function HoverCardRow({
                 initial={{ scaleX: 0 }}
                 animate={{ scaleX: open || active ? 1 : 0 }}
                 transition={
-                  reduceMotion ? { duration: 0.1 } : { duration: 0.45, ease: EASE_DECEL }
+                  reduceMotion
+                    ? { duration: 0.1 }
+                    : { duration: 0.45, ease: EASE_DECEL }
                 }
               />
             </span>
@@ -108,29 +119,38 @@ export default function HoverCardRow({
             </span>
           )}
         </div>
-
-        {/* expanded content: two lines + buffer, no media slot */}
-        <AnimatePresence initial={false}>
-          {showCard && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={
-                reduceMotion ? { duration: 0.14 } : { duration: 0.3, ease: EASE_DECEL }
-              }
-              className="relative overflow-hidden"
-            >
-              <div className="px-3 pb-3 pt-0.5">
-                <div className="line-clamp-2 text-xs leading-relaxed text-black/80">
-                  {blurb}
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </Link>
+
+      {/* shared preview card (does NOT affect row height; prevents list reflow) */}
+      <AnimatePresence initial={false}>
+        {show && (title || blurb || badge) && (
+          <motion.div
+            layoutId="sidebar-hover-preview"
+            className="absolute left-full top-1/2 z-20 ml-3 w-[220px] -translate-y-1/2 rounded-2xl bg-white p-3 text-black shadow-[0_12px_28px_rgba(0,0,0,0.35)]"
+            initial={{ opacity: 0, filter: "blur(2px)", scale: 0.98 }}
+            animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
+            exit={{ opacity: 0, filter: "blur(2px)", scale: 0.98 }}
+            transition={previewTransition}
+          >
+            {(badge || title) && (
+              <div className="mb-1">
+                {badge && (
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-black/50">
+                    {badge}
+                  </div>
+                )}
+                {title && (
+                  <div className="text-sm font-medium leading-snug">{title}</div>
+                )}
+              </div>
+            )}
+
+            {blurb && (
+              <div className="text-xs leading-relaxed text-black/70">{blurb}</div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
-
