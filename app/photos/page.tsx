@@ -1150,52 +1150,84 @@ function WindowFrame({
   onImageError: (id: string) => void;
 }) {
   const sectionRef = useRef<HTMLDivElement | null>(null);
+  const stickyRef = useRef<HTMLDivElement | null>(null);
   const [src, setSrc] = useState(() => buildR2Src(photo.id, EXT_CANDIDATES[0]));
   const extIdxRef = useRef(0);
+
+  const [frameH, setFrameH] = useState(0);
+  const [isSm, setIsSm] = useState(false);
 
   useEffect(() => {
     extIdxRef.current = 0;
     setSrc(buildR2Src(photo.id, EXT_CANDIDATES[0]));
   }, [photo.id]);
 
+  useEffect(() => {
+    const onResize = () => {
+      const h = stickyRef.current?.getBoundingClientRect().height;
+      setFrameH(h && Number.isFinite(h) && h > 0 ? h : window.innerHeight);
+    };
+    onResize();
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+    };
+  }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 640px)");
+    const on = () => setIsSm(mq.matches);
+    on();
+    try {
+      mq.addEventListener("change", on);
+      return () => mq.removeEventListener("change", on);
+    } catch {
+      mq.addListener(on);
+      return () => mq.removeListener(on);
+    }
+  }, []);
+
   const { scrollYProgress } = useScroll({
     target: sectionRef,
-    offset: ["start end", "end start"],
+    // align progress to the sticky lifetime so the bottom frame animation is visible
+    offset: ["start start", "end end"],
   });
 
   // window borders:
   // - open: top+bottom retract until the photo is full-screen
-  // - hold: full-screen; parallax freezes
-  // - close: bottom border moves up (photo exits) — timed shorter to avoid "dead" gap
-  const topInset = useTransform(scrollYProgress, [0, 0.22], ["22%", "0%"]);
-  const bottomInset = useTransform(
+  // - hold: full-screen
+  // - close: bottom border grows upward (inverse of the top open)
+  const topInsetPct = useTransform(scrollYProgress, [0, 0.22], [22, 0]);
+  const bottomInsetPct = useTransform(
     scrollYProgress,
-    [0, 0.22, 0.85, 1],
-    ["22%", "0%", "0%", "100%"],
+    [0, 0.22, 0.78, 1],
+    [22, 0, 0, 22],
   );
-  const clipPath = useMotionTemplate`inset(${topInset} 0% ${bottomInset} 0%)`;
+
+  const clipPath = useMotionTemplate`inset(${topInsetPct}% 0% ${bottomInsetPct}% 0%)`;
 
   const imageY = useTransform(
     scrollYProgress,
-    [0, 0.22, 0.85, 1],
-    ["-20%", "0%", "0%", "20%"],
+    [0, 0.22, 0.78, 1],
+    ["-18%", "0%", "0%", "18%"],
   );
 
   // location pill:
-  // - appears after open
-  // - stays during hold
-  // - as the bottom frame scrolls away, the pill lifts at the same rate (anchored to the bottom edge)
+  // - anchored to the faux bottom border
+  // - follows the bottom border exactly as it closes (same rate)
   const pillOpacity = useTransform(
     scrollYProgress,
-    [0, 0.22, 0.28, 0.86, 0.94, 1],
+    [0, 0.22, 0.28, 0.90, 0.98, 1],
     [0, 0, 1, 1, 0, 0],
   );
 
-  const pillY = useTransform(
-    scrollYProgress,
-    [0.22, 0.28, 0.85, 1],
-    ["12px", "0px", "0px", "-100vh"],
-  );
+  const baseBottomPx = isSm ? 24 : 16;
+  const pillBottom = useTransform(bottomInsetPct, (v) => {
+    const borderPx = (Math.max(0, v) / 100) * (frameH || 0);
+    return baseBottomPx + borderPx;
+  });
 
   const isPriority = index0 < 14 || windowIndices.has(index0);
   const showLocation = !isHoldText(photo.locationLabel);
@@ -1203,7 +1235,7 @@ function WindowFrame({
   return (
     <div id={`photo-${photo.id}`}>
       <div ref={sectionRef} className="relative h-[210vh] md:h-[220vh]">
-        <div className="sticky top-0 h-dvh bg-black overflow-hidden">
+        <div ref={stickyRef} className="sticky top-0 h-dvh bg-black overflow-hidden">
           <motion.div
             style={{ clipPath }}
             className="absolute inset-0 will-change-[clip-path]"
@@ -1237,8 +1269,8 @@ function WindowFrame({
 
           {showLocation && (
             <motion.div
-              style={{ opacity: pillOpacity, y: pillY }}
-              className="pointer-events-none absolute right-4 sm:right-6 bottom-4 sm:bottom-6"
+              style={{ opacity: pillOpacity, bottom: pillBottom }}
+              className="pointer-events-none absolute right-4 sm:right-6"
             >
               <div className="rounded-full bg-black/70 px-4 py-1.5 text-sm font-medium text-white/90 shadow-sm backdrop-blur-md">
                 <span className="line-clamp-1">{photo.locationLabel}</span>
@@ -1930,18 +1962,19 @@ function FloatingControls({
             type="button"
             aria-label="scroll to top"
             onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            className="fixed left-1/2 z-[200] -translate-x-1/2"
-            style={{ bottom: "1.25rem" }}
+            className="fixed left-1/2 z-[200] -translate-x-1/2 bottom-5 md:bottom-7"
+            style={{ y: footerLift ? -footerLift : 0 }}
             initial={{ opacity: 0, y: 10, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.96 }}
             transition={{ duration: 0.18, ease: [0.22, 0.61, 0.36, 1] }}
           >
-            <motion.div style={{ y: footerLift ? -footerLift : 0 }}>
-              <div className="h-9 w-9 rounded-full bg-black/35 backdrop-blur-md shadow-[0_10px_28px_rgba(0,0,0,0.70)] flex items-center justify-center">
+            <div className="relative h-11 w-11">
+              <div className="pointer-events-none absolute inset-0 rounded-full bg-black/35 backdrop-blur-md shadow-[0_10px_28px_rgba(0,0,0,0.70)]" />
+              <div className="relative flex h-full w-full items-center justify-center">
                 <ArrowUp className="h-4 w-4 text-neutral-200" />
               </div>
-            </motion.div>
+            </div>
           </motion.button>
         )}
       </AnimatePresence>
@@ -2233,12 +2266,23 @@ export default function PhotosPage() {
     const list = filteredPhotos;
     const nonWindow = list.filter((p) => !isWindowPhoto(p));
 
+    // requirement: page starts with a single full-width (non-window) photo.
+    // we force the first rendered section to be a full card.
+    const first = list[0];
+    const firstId = first?.id;
+
     // pick exactly 6 "70%" offset photos (evenly spaced across the non-window list)
-    const offsetCount = Math.min(6, nonWindow.length);
+    // exclude the first photo so the page reliably starts with a full-width hero.
+    const offsetCandidates = nonWindow.filter((p) => p.id !== firstId);
+    const offsetCount = Math.min(6, offsetCandidates.length);
     const offsetIds = new Set<string>();
     for (let k = 0; k < offsetCount; k++) {
-      const idx = Math.floor(((k + 1) * nonWindow.length) / (offsetCount + 1));
-      const p = nonWindow[Math.min(nonWindow.length - 1, Math.max(0, idx))];
+      const idx = Math.floor(
+        ((k + 1) * offsetCandidates.length) / (offsetCount + 1),
+      );
+      const p = offsetCandidates[
+        Math.min(offsetCandidates.length - 1, Math.max(0, idx))
+      ];
       offsetIds.add(p.id);
     }
 
@@ -2248,6 +2292,13 @@ export default function PhotosPage() {
     let lastWasRow2 = false;
     let offsetSide: "left" | "right" = "left";
     let lOrient: "left" | "right" = "left";
+
+    if (first) {
+      out.push({ kind: "full", photo: first, index0: getPhotoIndex0(first.id) });
+      i = 1;
+      sectionIdx = 1;
+      lastWasRow2 = false;
+    }
 
     const canUse = (p: PhotoMeta | undefined) => {
       if (!p) return false;
@@ -2352,17 +2403,18 @@ export default function PhotosPage() {
                   return (
                     <div key={`L-${a.id}-${b.id}-${c.id}`} className={gap}>
                       <div className="grid grid-cols-12 gap-6 md:gap-10 md:grid-rows-2">
+                        {/* L / backward-L: 3 photos only, and never smaller than a double-row half */}
                         <PhotoCard
                           photo={a}
                           index0={ia}
                           onImageError={reportBroken}
-                          sizes={TWO_THIRDS_SIZES}
+                          sizes={HALF_SIZES}
                           aspectClass="aspect-[16/9] md:aspect-auto md:h-full"
                           className={[
                             "col-span-12",
                             isLeft
-                              ? "md:col-span-8 md:row-span-2"
-                              : "md:col-span-8 md:col-start-5 md:row-span-2",
+                              ? "md:col-span-6 md:row-span-2"
+                              : "md:col-span-6 md:col-start-7 md:row-span-2",
                           ].join(" ")}
                         />
 
@@ -2370,10 +2422,10 @@ export default function PhotosPage() {
                           photo={b}
                           index0={ib}
                           onImageError={reportBroken}
-                          sizes={THIRD_SIZES}
+                          sizes={HALF_SIZES}
                           className={[
-                            "col-span-12 md:col-span-4",
-                            isLeft ? "md:row-start-1" : "md:col-start-1 md:row-start-1",
+                            "col-span-12 md:col-span-6 md:row-start-1",
+                            isLeft ? "md:col-start-7" : "md:col-start-1",
                           ].join(" ")}
                         />
 
@@ -2381,10 +2433,10 @@ export default function PhotosPage() {
                           photo={c}
                           index0={ic}
                           onImageError={reportBroken}
-                          sizes={THIRD_SIZES}
+                          sizes={HALF_SIZES}
                           className={[
-                            "col-span-12 md:col-span-4",
-                            isLeft ? "md:row-start-2" : "md:col-start-1 md:row-start-2",
+                            "col-span-12 md:col-span-6 md:row-start-2",
+                            isLeft ? "md:col-start-7" : "md:col-start-1",
                           ].join(" ")}
                         />
                       </div>
