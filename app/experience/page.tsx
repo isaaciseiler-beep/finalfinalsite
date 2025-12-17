@@ -3,8 +3,9 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Container from "@/components/Container";
-import ExperienceDeck from "@/components/ExperienceDeck";
 import EducationPopup from "@/components/EducationPopup";
+import ExperienceDeck from "@/components/ExperienceDeck";
+import Parallax from "@/components/Parallax";
 import { motion, useReducedMotion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
@@ -12,90 +13,64 @@ import Link from "next/link";
 export const dynamic = "force-static";
 
 type PressItem = {
-  title: string;
-  href: string;
-  source?: string;
-  image?: string;
+  publisher: string;
+  href?: string;
+  logo: string;
 };
 
+// Logo-only press reel (publisher names appear on hover).
+// Put CNN first (requested).
 const pressItems: PressItem[] = [
   {
-    title: "Featured in launch of ChatGPT Pulse",
-    href: "https://openai.com/index/introducing-chatgpt-pulse/",
-    source: "OpenAI",
-    image:
-      "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/press/pulse.jpg",
-  },
-  {
-    title: "OpenAI Instagram spotlight on ChatGPT Study Mode",
-    href: "https://www.instagram.com/chatgpt/reel/DNyG5VvXEZM/",
-    source: "OpenAI",
-    image:
-      "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/press/study-mode.jpg",
-  },
-  {
-    title: "WashU Rhodes Scholar finalist",
-    href:
-      "https://source.wustl.edu/2024/11/seniors-darden-seiler-were-rhodes-scholars-finalists/",
-    source: "Rhodes Trust",
-    image:
-      "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/press/rhodes.jpg",
-  },
-  {
-    title: "Co-published Book on Education Uses of ChatGPT",
-    href: "https://chatgpt.com/100chats-project",
-    source: "OpenAI",
-    image:
-      "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/press/100chats.jpg",
-  },
-  {
-    title: "Awarded 2024 Michigan Truman Scholarship",
-    href: "https://source.washu.edu/2024/04/junior-seiler-awarded-truman-scholarship/",
-    source: "Washington University",
-    image:
-      "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/press/truman.jpg",
-  },
-  {
-    title: "Awarded 2025 Fulbright to Taiwan",
-    href:
-      "https://source.wustl.edu/2025/06/several-alumni-earn-fulbright-awards/",
-    source: "Washington University",
-    image:
-      "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/press/fulbright.jpg",
-  },
-  {
-    title: "Truman Scholarship Q+A",
+    publisher: "CNN",
     href: "",
-    source: "Student Life",
-    image:
-      "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/press/trumanisaac.jpg",
+    logo: "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/media-portfolio/cnn.png",
   },
   {
-    title: "60 Truman Scholars Announced For 2024",
+    publisher: "Dispatch",
     href: "",
-    source: "Forbes",
-    image:
-      "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/press/harrytruman.jpg",
+    logo: "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/media-portfolio/dispatch.png",
   },
   {
-    title: "Included in the best newspaper honor at Missouri College Media awards",
+    publisher: "NYT",
     href: "",
-    source: "Washington University",
-    image:
-      "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/press/washuspring.png",
+    logo: "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/media-portfolio/nyt.png",
   },
   {
-    title: "University profile",
-    href:
-      "https://artsci.washu.edu/ampersand/isaac-seiler-setting-his-sights-high",
-    source: "Washington University",
-    image:
-      "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/press/wustl.jpg",
+    publisher: "WaPo",
+    href: "",
+    logo: "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/media-portfolio/wapo.png",
+  },
+  {
+    publisher: "Slate",
+    href: "",
+    logo: "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/media-portfolio/slate.png",
+  },
+  {
+    publisher: "Michigan\nAdvance",
+    href: "",
+    logo: "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/media-portfolio/advance.png",
+  },
+  {
+    publisher: "MLive",
+    href: "",
+    logo: "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/media-portfolio/mlive.png",
+  },
+  {
+    publisher: "RIAA",
+    href: "",
+    logo: "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/media-portfolio/riaa.png",
+  },
+  {
+    publisher: "The\n19th",
+    href: "",
+    logo: "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/media-portfolio/19th.png",
   },
 ];
 
-const CARD_WIDTH = 220; // px
-const CARD_GAP = 16; // px, matches gap-4
+// Larger by ~15% vs 96px, but still "small" vs the old 220px cards.
+const LOGO_DIAMETER = 110; // px
+const LOGO_GAP = 16; // px (gap-4)
 
 function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
@@ -110,7 +85,7 @@ export default function ExperiencePage() {
   const pressCount = pressItems.length;
   const hasPress = pressCount > 0;
 
-  // clamp carousel so you can fully see the last tile, but never scroll past it
+  // Clamp carousel so the last tile can be fully visible, but never scroll past it.
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [viewportW, setViewportW] = useState(0);
 
@@ -131,7 +106,7 @@ export default function ExperiencePage() {
     if (!viewportW) return 1;
     return Math.max(
       1,
-      Math.floor((viewportW + CARD_GAP) / (CARD_WIDTH + CARD_GAP)),
+      Math.floor((viewportW + LOGO_GAP) / (LOGO_DIAMETER + LOGO_GAP)),
     );
   }, [viewportW]);
 
@@ -166,137 +141,142 @@ export default function ExperiencePage() {
       <div className="-mx-4 sm:-mx-6 overflow-x-hidden">
         <div className="px-4 sm:px-6 pt-[112px] md:pt-[112px]">
           {/* education */}
-          <section className="pb-5 md:pb-6">
-            <EducationPopup
-              open={eduOpen}
-              onToggle={() => setEduOpen((v) => !v)}
-            />
-          </section>
+          <Parallax amount={-70}>
+            <section className="pb-5 md:pb-6">
+              <EducationPopup
+                open={eduOpen}
+                onToggle={() => setEduOpen((v) => !v)}
+              />
+            </section>
+          </Parallax>
 
           {/* news header */}
           {hasPress && (
+            <Parallax amount={-55}>
+              <section className="mb-4 md:mb-5">
+                <div className="flex justify-start">
+                  <h2 className="text-left text-4xl font-normal leading-none tracking-tight md:text-6xl">
+                    News
+                  </h2>
+                </div>
+              </section>
+            </Parallax>
+          )}
+
+          {/* press carousel (no right buffer; bleeds off-screen to the right) */}
+          {hasPress && (
+            <Parallax amount={-90}>
+              <section className="mb-7 md:mb-8">
+                <div className="relative">
+                  {/* Only fade on the left; right edge should feel un-bezeled/flush. */}
+                  <div className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-background via-background/70 to-transparent sm:w-14 md:w-16" />
+
+                  {/* cancel inner padding only for this scroller: keep left padding, remove right */}
+                  <div className="-mx-4 pl-4 sm:-mx-6 sm:pl-6">
+                    <div ref={viewportRef} className="overflow-hidden">
+                      <motion.div
+                        className="flex gap-4"
+                        animate={{ x: -pressIndex * (LOGO_DIAMETER + LOGO_GAP) }}
+                        transition={slideTransition}
+                        drag="x"
+                        dragConstraints={{ left: 0, right: 0 }}
+                        dragElastic={0.18}
+                        onDragEnd={(_, info) => {
+                          if (info.offset.x < -60 && canNext) goNextPress();
+                          else if (info.offset.x > 60 && canPrev) goPrevPress();
+                        }}
+                      >
+                        {pressItems.map((item, idx) => {
+                          const Circle = (
+                            <article
+                              className="group relative grid flex-shrink-0 place-items-center overflow-hidden rounded-full bg-card shadow-[0_0_20px_rgba(0,0,0,0.35)]"
+                              style={{ width: LOGO_DIAMETER, height: LOGO_DIAMETER }}
+                            >
+                              <div className="relative h-full w-full">
+                                <Image
+                                  src={item.logo}
+                                  alt={item.publisher.replace("\n", " ")}
+                                  fill
+                                  className="object-contain p-5"
+                                  sizes={`${LOGO_DIAMETER}px`}
+                                />
+                                {/* hover overlay: slightly darken + show publisher name */}
+                                <div className="pointer-events-none absolute inset-0 bg-black/0 transition-colors duration-200 group-hover:bg-black/35" />
+                                <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-3 text-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                                  <span className="whitespace-pre-line text-[11px] font-medium leading-tight text-white">
+                                    {item.publisher}
+                                  </span>
+                                </div>
+                              </div>
+                            </article>
+                          );
+
+                          // Empty href means non-clickable (but still visible).
+                          if (!item.href) {
+                            return (
+                              <div
+                                key={`${item.publisher}-${idx}`}
+                                className="block"
+                                aria-disabled="true"
+                              >
+                                {Circle}
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <Link
+                              key={`${item.href}-${idx}`}
+                              href={item.href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block focus-visible:outline-none"
+                            >
+                              {Circle}
+                            </Link>
+                          );
+                        })}
+                      </motion.div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between text-xs text-muted">
+                  <div className="flex items-center gap-2">
+                    <CarouselNavButton
+                      dir="left"
+                      onClick={goPrevPress}
+                      disabled={!canPrev}
+                    />
+                    <CarouselNavButton
+                      dir="right"
+                      onClick={goNextPress}
+                      disabled={!canNext}
+                    />
+                  </div>
+                  <span className="tabular-nums">
+                    {pressIndex + 1} / {pressCount}
+                  </span>
+                </div>
+              </section>
+            </Parallax>
+          )}
+
+          {/* resume header */}
+          <Parallax amount={-55}>
             <section className="mb-4 md:mb-5">
               <div className="flex justify-start">
                 <h2 className="text-left text-4xl font-normal leading-none tracking-tight md:text-6xl">
-                  News
+                  Resume
                 </h2>
               </div>
             </section>
-          )}
-
-          {/* press carousel */}
-          {hasPress && (
-            <section className="mb-7 md:mb-8">
-              <div className="relative">
-                <div className="pointer-events-none absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-background via-background/70 to-transparent sm:w-16 md:w-20" />
-                <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-background via-background/70 to-transparent sm:w-16 md:w-20" />
-
-                <div ref={viewportRef} className="overflow-hidden">
-                  <motion.div
-                    className="flex gap-4"
-                    animate={{ x: -pressIndex * (CARD_WIDTH + CARD_GAP) }}
-                    transition={slideTransition}
-                    drag="x"
-                    dragConstraints={{ left: 0, right: 0 }}
-                    dragElastic={0.18}
-                    onDragEnd={(_, info) => {
-                      if (info.offset.x < -60 && canNext) goNextPress();
-                      else if (info.offset.x > 60 && canPrev) goPrevPress();
-                    }}
-                  >
-                    {pressItems.map((item, idx) => {
-                      const Card = (
-                        <article className="h-[320px] w-[220px] overflow-hidden rounded-2xl bg-card shadow-[0_0_20px_rgba(0,0,0,0.35)] md:h-[360px]">
-                          <div className="relative h-full w-full">
-                            {item.image ? (
-                              <Image
-                                src={item.image}
-                                alt={item.title}
-                                fill
-                                className="object-cover"
-                                sizes="220px"
-                              />
-                            ) : (
-                              <div className="h-full w-full bg-neutral-800" />
-                            )}
-                            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-                            <div className="absolute inset-x-0 bottom-0 p-4 text-left">
-                              {item.source && (
-                                <div className="text-[10px] font-medium uppercase tracking-[0.2em] text-neutral-300/80">
-                                  {item.source}
-                                </div>
-                              )}
-                              <h3 className="mt-2 text-sm font-semibold leading-snug text-neutral-50 md:text-base">
-                                {item.title}
-                              </h3>
-                            </div>
-                          </div>
-                        </article>
-                      );
-
-                      if (!item.href) {
-                        return (
-                          <div
-                            key={`${item.title}-${idx}`}
-                            className="block flex-shrink-0"
-                            aria-disabled="true"
-                          >
-                            {Card}
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <Link
-                          key={`${item.href}-${idx}`}
-                          href={item.href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block flex-shrink-0 focus-visible:outline-none"
-                        >
-                          {Card}
-                        </Link>
-                      );
-                    })}
-                  </motion.div>
-                </div>
-              </div>
-
-              <div className="mt-4 flex items-center justify-between text-xs text-muted">
-                <div className="flex items-center gap-2">
-                  <CarouselNavButton
-                    dir="left"
-                    onClick={goPrevPress}
-                    disabled={!canPrev}
-                  />
-                  <CarouselNavButton
-                    dir="right"
-                    onClick={goNextPress}
-                    disabled={!canNext}
-                  />
-                </div>
-                <span className="tabular-nums">
-                  {pressIndex + 1} / {pressCount}
-                </span>
-              </div>
-            </section>
-          )}
-
-          {/* resume header (20% smaller + rename) */}
-          <section className="mb-4 md:mb-5">
-            <div className="flex justify-start">
-              <h2 className="text-left text-4xl font-normal leading-none tracking-tight md:text-6xl">
-                Resume
-              </h2>
-            </div>
-          </section>
+          </Parallax>
 
           {/* resume list */}
           <section aria-label="resume" className="relative overflow-x-hidden">
             <Suspense
-              fallback={
-                <div className="px-4 py-8 text-sm text-muted">loading…</div>
-              }
+              fallback={<div className="px-4 py-8 text-sm text-muted">loading…</div>}
             >
               <ExperienceDeck mode="timeline" fanOutKey="experience" />
             </Suspense>
@@ -333,4 +313,3 @@ function CarouselNavButton({
     </button>
   );
 }
-
