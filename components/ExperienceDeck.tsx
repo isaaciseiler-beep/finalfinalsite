@@ -1,133 +1,193 @@
 // components/ExperienceDeck.tsx — DROP-IN REPLACEMENT
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  experienceItems,
-  type ExperiencePhoto,
-  type PressHit,
-} from "@/lib/experienceData";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import Link from "next/link";
 import Image from "next/image";
+import Link from "next/link";
+import Parallax from "@/components/Parallax";
+import { experienceByYear, type ExperienceItem } from "@/lib/experienceData";
 
-type Props = {
-  mode: "cards" | "timeline";
-  fanOutKey?: string;
+type Mode = "cards" | "timeline";
+type ExperienceWithYear = ExperienceItem & { year: string };
 
-  // kept for compatibility with existing callers (e.g. ExperienceTimeline.tsx)
-  // not used because you requested no year filters and reverse-chrono display
-  activeYear?: string;
-  onActiveYearChange?: (year: string) => void;
-};
+function buildItems(): ExperienceWithYear[] {
+  const years = Object.keys(experienceByYear).sort(
+    (a, b) => Number(b) - Number(a),
+  );
 
-const GAP = 16; // gap-4
+  return years.flatMap((year) =>
+    (experienceByYear[year] ?? []).map((item) => ({ ...item, year })),
+  );
+}
+
+function makeEntryKey(item: ExperienceWithYear, index: number) {
+  return `${item.year}-${item.org}-${item.role}-${index}`;
+}
 
 function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
 }
 
-function renderCaption(caption: string) {
-  const parts = caption.split(/(\*[^*]+\*)/g).filter(Boolean);
-  return parts.map((part, idx) => {
-    if (part.startsWith("*") && part.endsWith("*")) {
-      return (
-        <em key={idx} className="not-italic italic">
-          {part.slice(1, -1)}
-        </em>
-      );
-    }
-    return <span key={idx}>{part}</span>;
-  });
+export default function ExperienceDeck({
+  mode = "cards",
+  fanOutKey,
+}: {
+  mode?: Mode;
+  fanOutKey: string;
+  activeYear?: string;
+  onActiveYearChange?: (year: string) => void;
+}) {
+  // Timeline is the canonical view for the experience page.
+  if (mode === "timeline") {
+    return <ExperienceTimelineList fanOutKey={fanOutKey} />;
+  }
+  return <ExperienceCardsDeck fanOutKey={fanOutKey} />;
 }
 
-export default function ExperienceDeck({ mode, fanOutKey = "exp" }: Props) {
-  // per your request: no filters; always reverse-chrono list
-  // (mode kept only for API compatibility)
-  const items = useMemo(() => experienceItems, []);
+function ExperienceTimelineList({ fanOutKey }: { fanOutKey: string }) {
+  const items = useMemo(buildItems, []);
+
+  if (!items.length) {
+    return (
+      <div className="rounded-2xl bg-neutral-900 px-6 py-10 text-sm text-muted">
+        no experience entries yet.
+      </div>
+    );
+  }
 
   return (
-    <div className="w-full overflow-x-hidden">
-      <div className="grid gap-10 md:gap-12">
-        {items.map((it, idx) => (
-          <article
-            key={`${fanOutKey}-${idx}`}
-            className="w-full border-b border-border/60 pb-10 last:border-b-0 last:pb-0"
-          >
-            {/* dates (unchanged) */}
-            <div className="text-xs uppercase tracking-[0.2em] text-muted">
-              {it.dates}
-            </div>
-
-            {/* 10% bigger text + normal spacing */}
-            <h3 className="mt-2 text-[22px] font-medium leading-snug md:text-[24px]">
-              {it.role}
-            </h3>
-            <div className="mt-1 text-[16.5px] leading-normal text-muted md:text-[18px]">
-              {it.org}
-            </div>
-
-            <p className="mt-4 max-w-full text-[16.5px] leading-normal text-muted md:text-[18px]">
-              {it.summary}
-            </p>
-
-            {/* restore buttons (below description, above photos) */}
-            {it.link ? (
-              <div className="mt-4">
-                <ResumeLinkPill
-                  href={it.link}
-                  label={it.link_text ?? `open link for ${it.role}`}
-                />
-              </div>
-            ) : null}
-
-            {it.photos?.length ? (
-              <div className="mt-6">
-                <ResumePhotoCarousel photos={it.photos} />
-              </div>
-            ) : null}
-
-            {it.pressHits?.length ? (
-              <div className="mt-7">
-                <div className="mb-3 text-xs font-medium uppercase tracking-[0.2em] text-muted">
-                  Press Hits
-                </div>
-                <PressHitsGrid hits={it.pressHits} />
-              </div>
-            ) : null}
-          </article>
-        ))}
+    <section
+      className="relative isolate pb-10 pt-1"
+      aria-label="resume timeline"
+      data-fan-out-key={fanOutKey}
+    >
+      {/* clearer separators */}
+      <div className="divide-y divide-neutral-700/70">
+        {items.map((item, index) => {
+          const key = makeEntryKey(item, index);
+          const amount = index % 2 === 0 ? -70 : -55;
+          return (
+            <Parallax key={key} amount={amount} className="py-8 md:py-10">
+              <TimelineEntry item={item} index={index} total={items.length} />
+            </Parallax>
+          );
+        })}
       </div>
-    </div>
+    </section>
   );
 }
 
-function ResumeLinkPill({ href, label }: { href: string; label: string }) {
+function TimelineEntry({
+  item,
+  index,
+  total,
+}: {
+  item: ExperienceWithYear;
+  index: number;
+  total: number;
+}) {
+  const photos: string[] = useMemo(() => {
+    const fromList = (item.photos ?? undefined)?.filter(Boolean) ?? [];
+    const fromSingle = item.image ? [item.image] : [];
+    // Prefer explicit photo list, then fall back to single image.
+    return fromList.length ? fromList : fromSingle;
+  }, [item.photos, item.image]);
+
+  return (
+    <article className="relative text-left">
+      <header className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
+          {/* ~15% bigger than the previous role header */}
+          <h3 className="text-[1.45rem] font-semibold tracking-tight md:text-[1.75rem]">
+            {item.role}
+          </h3>
+          <p className="mt-1 text-sm text-muted">{item.org}</p>
+        </div>
+
+        {/* grey pill date (no outline) */}
+        <div className="shrink-0">
+          <span className="inline-flex rounded-full bg-neutral-800/70 px-3 py-1 text-[11px] font-medium tracking-[0.12em] text-neutral-200">
+            {item.dates}
+          </span>
+        </div>
+      </header>
+
+      <p className="mt-4 text-sm leading-relaxed text-muted">{item.summary}</p>
+
+      {/* link button (between text and photos) */}
+      {item.link && (
+        <div className="mt-5">
+          <ResumeLinkButton href={item.link}>
+            {item.link_text ?? "view details"}
+          </ResumeLinkButton>
+        </div>
+      )}
+
+      {/* scrollable photos — bleed off-screen to the right (no right buffer) */}
+      {photos.length > 0 && (
+        <div className="mt-6 -mx-4 pl-4 sm:-mx-6 sm:pl-6">
+          <MediaRail photos={photos} ariaLabel={`${item.role} photos`} />
+        </div>
+      )}
+
+      {/* trailing breathing room on the last entry */}
+      {index === total - 1 && <div className="h-2" />}
+    </article>
+  );
+}
+
+function ResumeLinkButton({
+  href,
+  children,
+}: {
+  href: string;
+  children: ReactNode;
+}) {
   return (
     <Link
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label={label}
-      className="inline-flex h-9 items-center justify-center rounded-full border border-border bg-background/20 px-4 text-sm text-muted transition-colors hover:bg-background/40 hover:text-foreground focus-visible:outline-none"
+      className={[
+        "group inline-flex max-w-2xl items-start",
+        "rounded-2xl bg-neutral-900/40 px-4 py-3",
+        "text-sm leading-snug text-neutral-100",
+        "no-underline transition-colors hover:bg-neutral-800/60 hover:no-underline",
+        "focus-visible:outline-none",
+      ].join(" ")}
     >
-      <span className="text-base leading-none">↗</span>
+      <span className="text-muted group-hover:text-foreground">
+        {children}
+        <span
+          aria-hidden
+          className="ml-1 inline-block transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+        >
+          ↗
+        </span>
+      </span>
     </Link>
   );
 }
 
-function ResumePhotoCarousel({ photos }: { photos: ExperiencePhoto[] }) {
-  const reduce = useReducedMotion();
+// ---------- media rail (per-entry photo carousel) ----------
 
-  const count = photos.length;
-  const hasMany = count > 1;
+const PHOTO_W = 260;
+const PHOTO_H = 170;
+const PHOTO_GAP = 16;
+
+function MediaRail({
+  photos,
+  ariaLabel,
+}: {
+  photos: string[];
+  ariaLabel: string;
+}) {
+  const reduce = useReducedMotion();
+  const [index, setIndex] = useState(0);
 
   const viewportRef = useRef<HTMLDivElement | null>(null);
-  const firstCardRef = useRef<HTMLDivElement | null>(null);
-
   const [viewportW, setViewportW] = useState(0);
-  const [cardW, setCardW] = useState(0);
-  const [index, setIndex] = useState(0);
 
   useEffect(() => {
     const el = viewportRef.current;
@@ -141,31 +201,18 @@ function ResumePhotoCarousel({ photos }: { photos: ExperiencePhoto[] }) {
     return () => ro.disconnect();
   }, []);
 
-  useEffect(() => {
-    const el = firstCardRef.current;
-    if (!el) return;
-
-    const update = () => setCardW(el.clientWidth || 0);
-    update();
-
-    const ro = new ResizeObserver(() => update());
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [count]);
-
-  const step = useMemo(() => {
-    if (!cardW) return 0;
-    return cardW + GAP;
-  }, [cardW]);
-
   const visibleCount = useMemo(() => {
-    if (!viewportW || !step) return 1;
-    return Math.max(1, Math.floor((viewportW + GAP) / step));
-  }, [viewportW, step]);
+    if (!viewportW) return 1;
+    return Math.max(
+      1,
+      Math.floor((viewportW + PHOTO_GAP) / (PHOTO_W + PHOTO_GAP)),
+    );
+  }, [viewportW]);
 
-  const maxIndex = useMemo(() => {
-    return Math.max(0, count - visibleCount);
-  }, [count, visibleCount]);
+  const maxIndex = useMemo(
+    () => Math.max(0, photos.length - visibleCount),
+    [photos.length, visibleCount],
+  );
 
   useEffect(() => {
     setIndex((prev) => clamp(prev, 0, maxIndex));
@@ -174,146 +221,138 @@ function ResumePhotoCarousel({ photos }: { photos: ExperiencePhoto[] }) {
   const canPrev = index > 0;
   const canNext = index < maxIndex;
 
-  const goPrev = () => setIndex((prev) => Math.max(0, prev - 1));
-  const goNext = () => setIndex((prev) => Math.min(maxIndex, prev + 1));
-
   const slideTransition = reduce
     ? { duration: 0 }
     : { duration: 0.45, ease: [0.4, 0.0, 0.2, 1] as any };
 
   return (
-    <div className="relative overflow-x-hidden">
-      <div className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-background via-background/70 to-transparent sm:w-12" />
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-background via-background/70 to-transparent sm:w-12" />
-
-      <div
-        ref={viewportRef}
-        className="overflow-hidden"
-        style={{ touchAction: "pan-y" }}
-      >
+    <section aria-label={ariaLabel}>
+      <div ref={viewportRef} className="overflow-hidden">
         <motion.div
           className="flex gap-4"
-          animate={{ x: -index * step }}
+          animate={{ x: -index * (PHOTO_W + PHOTO_GAP) }}
           transition={slideTransition}
+          drag="x"
+          dragConstraints={{ left: 0, right: 0 }}
+          dragElastic={0.18}
+          onDragEnd={(_, info) => {
+            if (info.offset.x < -60 && canNext) setIndex((v) => v + 1);
+            else if (info.offset.x > 60 && canPrev) setIndex((v) => v - 1);
+          }}
         >
-          {photos.map((p, i) => (
-            <div
-              key={`${p.src}-${i}`}
-              ref={i === 0 ? firstCardRef : undefined}
-              className="flex-shrink-0 w-[88%] max-w-[980px] sm:w-[72%] lg:w-[62%] 2xl:w-[56%]"
+          {photos.map((src, i) => (
+            <figure
+              key={`${src}-${i}`}
+              className="relative flex-shrink-0 overflow-hidden rounded-2xl bg-neutral-900 shadow-[0_0_20px_rgba(0,0,0,0.35)]"
+              style={{ width: PHOTO_W, height: PHOTO_H }}
             >
-              <article className="aspect-video w-full overflow-hidden rounded-2xl bg-card shadow-[0_0_20px_rgba(0,0,0,0.35)]">
-                <div className="relative h-full w-full">
-                  <Image
-                    src={p.src}
-                    alt="resume photo"
-                    fill
-                    className="object-cover"
-                    sizes="100vw"
-                  />
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
-                  <div className="absolute inset-x-0 bottom-0 p-3 md:p-4">
-                    <p className="text-sm leading-snug text-neutral-50 md:text-base">
-                      {renderCaption(p.caption)}
-                    </p>
-                  </div>
-                </div>
-              </article>
-            </div>
+              <Image
+                src={src}
+                alt=""
+                fill
+                className="object-cover"
+                sizes={`${PHOTO_W}px`}
+              />
+            </figure>
           ))}
         </motion.div>
       </div>
 
-      {hasMany ? (
-        <div className="mt-4 flex items-center justify-between text-xs text-muted">
-          <div className="flex items-center gap-2">
-            <CarouselNavButton dir="left" onClick={goPrev} disabled={!canPrev} />
-            <CarouselNavButton
-              dir="right"
-              onClick={goNext}
-              disabled={!canNext}
-            />
-          </div>
-          <span className="tabular-nums">
-            {index + 1} / {count}
-          </span>
+      {/* arrows grey out when there is nothing left to scroll */}
+      <div className="mt-3 flex items-center justify-between text-xs text-muted">
+        <div className="flex items-center gap-2">
+          <CarouselNavButton
+            dir="left"
+            onClick={() => setIndex((v) => Math.max(0, v - 1))}
+            disabled={!canPrev}
+          />
+          <CarouselNavButton
+            dir="right"
+            onClick={() => setIndex((v) => Math.min(maxIndex, v + 1))}
+            disabled={!canNext}
+          />
         </div>
-      ) : null}
-    </div>
+        <span className="tabular-nums">
+          {Math.min(index + 1, photos.length)} / {photos.length}
+        </span>
+      </div>
+    </section>
   );
 }
 
-function PressHitsGrid({ hits }: { hits: PressHit[] }) {
-  const primaryThumb = (url: string) =>
-    `https://s0.wp.com/mshots/v1/${encodeURIComponent(url)}?w=900`;
-  const fallbackThumb = (url: string) =>
-    `https://image.thum.io/get/width/900/${encodeURIComponent(url)}`;
+// ---------- optional cards mode (kept for API compatibility) ----------
+
+function ExperienceCardsDeck({ fanOutKey }: { fanOutKey: string }) {
+  const reduce = useReducedMotion();
+  const items = useMemo(buildItems, []);
+  const [idx, setIdx] = useState(0);
+
+  useEffect(() => {
+    if (!items.length) return;
+    setIdx((i) => clamp(i, 0, items.length - 1));
+  }, [items.length]);
+
+  const cur = items[idx];
+  if (!items.length || !cur) {
+    return (
+      <div className="rounded-2xl bg-neutral-900 px-6 py-10 text-sm text-muted">
+        no experience entries yet.
+      </div>
+    );
+  }
+
+  const hasPrev = idx > 0;
+  const hasNext = idx < items.length - 1;
 
   return (
-    <div className="grid w-full grid-cols-2 gap-4 sm:grid-cols-3">
-      {hits.map((h, idx) => (
-        <PressHitCircle
-          key={`${h.href}-${idx}`}
-          href={h.href}
-          publisher={h.publisher}
-          title={h.title}
-          primarySrc={h.image || primaryThumb(h.href)}
-          fallbackSrc={fallbackThumb(h.href)}
-        />
-      ))}
-    </div>
-  );
-}
-
-function PressHitCircle({
-  href,
-  publisher,
-  title,
-  primarySrc,
-  fallbackSrc,
-}: {
-  href: string;
-  publisher: string;
-  title: string;
-  primarySrc: string;
-  fallbackSrc: string;
-}) {
-  const [src, setSrc] = useState(primarySrc);
-
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="group relative aspect-square w-full overflow-hidden rounded-full border border-border bg-card shadow-subtle focus-visible:outline-none"
-      style={{ touchAction: "pan-y" }}
-      aria-label={`${publisher}: ${title}`}
+    <section
+      className="relative isolate pb-10 pt-2"
+      aria-label="experience cards"
+      data-fan-out-key={fanOutKey}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={src}
-        alt={title}
-        loading="lazy"
-        className="absolute inset-0 h-full w-full object-cover transition-opacity duration-300 group-hover:opacity-80"
-        onError={() => {
-          setSrc((prev) => (prev === primarySrc ? fallbackSrc : prev));
-        }}
-      />
-
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-
-      <div className="pointer-events-none absolute inset-x-0 top-0 p-3">
-        <div className="inline-flex rounded-full bg-black/60 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.2em] text-neutral-100">
-          {publisher}
+      <div className="mb-4 flex items-center justify-between text-xs text-muted">
+        <div className="flex items-center gap-2">
+          <CarouselNavButton
+            dir="left"
+            onClick={() => hasPrev && setIdx((i) => i - 1)}
+            disabled={!hasPrev}
+          />
+          <CarouselNavButton
+            dir="right"
+            onClick={() => hasNext && setIdx((i) => i + 1)}
+            disabled={!hasNext}
+          />
         </div>
+        <span className="tabular-nums">
+          {idx + 1} / {items.length}
+        </span>
       </div>
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 p-3">
-        <div className="w-full rounded-full bg-black/60 px-3 py-2 text-[11px] leading-tight text-neutral-100">
-          {title}
-        </div>
-      </div>
-    </a>
+      <motion.article
+        key={makeEntryKey(cur, idx)}
+        initial={reduce ? false : { opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={reduce ? { duration: 0 } : { duration: 0.35 }}
+        className="rounded-2xl bg-neutral-900 px-7 py-7"
+      >
+        <span className="inline-flex rounded-full bg-neutral-800/70 px-3 py-1 text-[11px] font-medium tracking-[0.12em] text-neutral-200">
+          {cur.dates}
+        </span>
+        <h3 className="mt-3 text-[1.45rem] font-semibold tracking-tight md:text-[1.75rem]">
+          {cur.role}
+        </h3>
+        <p className="mt-1 text-sm text-muted">{cur.org}</p>
+        <p className="mt-4 text-sm leading-relaxed text-muted">{cur.summary}</p>
+
+        {cur.link && (
+          <div className="mt-5">
+            <ResumeLinkButton href={cur.link}>
+              {cur.link_text ?? "view details"}
+            </ResumeLinkButton>
+          </div>
+        )}
+      </motion.article>
+    </section>
   );
 }
 
@@ -343,4 +382,3 @@ function CarouselNavButton({
     </button>
   );
 }
-
