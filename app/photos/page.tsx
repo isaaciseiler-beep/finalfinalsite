@@ -1219,7 +1219,7 @@ function isWindowPhoto(photo: PhotoMeta) {
   return computeLayoutVariant(photo, getPhotoIndex0(photo.id)) === "window";
 }
 
-// ---------- WINDOW (fixed frame + scroll-through photo) ----------
+// ---------- WINDOW (fixed frame + scroll-past image + true bottom border) ----------
 
 function WindowFrame({
   photo,
@@ -1239,97 +1239,84 @@ function WindowFrame({
     setSrc(buildR2Src(photo.id, EXT_CANDIDATES[0]));
   }, [photo.id]);
 
-  // progress is mapped to the *sticky window duration*:
-  // 0 when the window pins, 1 right before it unpins.
   const { scrollYProgress } = useScroll({
     target: sectionRef,
-    offset: ["start start", "end end"],
+    // start the background drift as soon as the window hits the viewport
+    offset: ["start start", "end start"],
   });
 
-  // frame bars (vh so they scale with viewport height)
-  const FRAME_VH = 22;
+  // "frame" is simulated with top/bottom bars.
+  // open: bars retract (22vh -> 0)
+  // hold: bars stay at 0
+  // close: bars return (0 -> 22vh) (true inverse of open)
+  // Using bars instead of clip-path keeps the frame fixed and makes the bottom border animation reliable.
+  const frameVh = useTransform(scrollYProgress, [0, 0.12, 0.88, 1], [22, 0, 0, 22]);
+  const topBarH = useMotionTemplate`${frameVh}vh`;
+  const bottomBarH = useMotionTemplate`${frameVh}vh`;
 
-  // open fast, hold, then close fast (no "dead" black gap at the end)
-  const topFrameVh = useTransform(
-    scrollYProgress,
-    [0, 0.18, 0.82, 1],
-    [FRAME_VH, 0, 0, FRAME_VH],
-  );
-  const bottomFrameVh = useTransform(
-    scrollYProgress,
-    [0, 0.18, 0.82, 1],
-    [FRAME_VH, 0, 0, FRAME_VH],
-  );
+  // Strong "scroll past" feel: image moves behind the fixed frame across the full section.
+  // Use a smaller translation + larger scale to avoid uncovered black gaps at the top/bottom.
+  // Keep the beginning slightly "delayed" so it drifts more subtly when first seen.
+  const imageY = useTransform(scrollYProgress, [0, 0.35, 1], ["20%", "12%", "-20%"]);
 
-  const topFrameH = useMotionTemplate`${topFrameVh}vh`;
-  const bottomFrameH = useMotionTemplate`${bottomFrameVh}vh`;
-
-  // strong parallax that starts immediately when the window enters
-  const imageY = useTransform(scrollYProgress, [0, 1], ["-22%", "22%"]);
-
-  // pill follows the *moving bottom frame edge* (not the photo)
-  const pillBottom = useMotionTemplate`calc(${bottomFrameVh}vh + 16px)`;
+  // location pill is anchored to the bottom edge of the moving frame (i.e., above the bottom bar)
   const pillOpacity = useTransform(
     scrollYProgress,
-    [0, 0.12, 0.20, 0.80, 0.88, 1],
+    [0, 0.1, 0.18, 0.82, 0.9, 1],
     [0, 0, 1, 1, 0, 0],
   );
-  const pillY = useTransform(scrollYProgress, [0.12, 0.20, 0.80, 0.88], [10, 0, 0, 10]);
+  const pillBottom = useMotionTemplate`calc(${frameVh}vh + 16px)`;
 
   const isPriority = index0 < 14 || windowIndices.has(index0);
   const showLocation = !isHoldText(photo.locationLabel);
 
   return (
     <div id={`photo-${photo.id}`}>
-      {/* tall section so you scroll "past" the photo while the frame stays fixed */}
-      <div ref={sectionRef} className="relative h-[180vh] md:h-[200vh]">
+      <div ref={sectionRef} className="relative h-[200vh] md:h-[215vh]">
         <div className="sticky top-0 h-dvh bg-black overflow-hidden">
-          {/* photo behind the frame */}
-          <motion.div className="absolute inset-0">
-            <motion.div
-              style={{ y: imageY, scale: 1.12 }}
-              className="absolute inset-0 will-change-transform"
-            >
-              <Image
-                src={src}
-                alt={photo.alt}
-                priority={isPriority}
-                placeholder="blur"
-                blurDataURL={BLUR_DATA_URL}
-                fill
-                sizes={FLEX_SIZES}
-                quality={76}
-                className="object-cover"
-                onError={() => {
-                  const nextIdx = extIdxRef.current + 1;
-                  if (nextIdx < EXT_CANDIDATES.length) {
-                    extIdxRef.current = nextIdx;
-                    setSrc(buildR2Src(photo.id, EXT_CANDIDATES[nextIdx]));
-                    return;
-                  }
-                  onImageError(photo.id);
-                }}
-              />
-            </motion.div>
+          {/* image (moves behind frame) */}
+          <motion.div
+            style={{ y: imageY, scale: 1.5 }}
+            className="absolute inset-0 will-change-transform"
+          >
+            <Image
+              src={src}
+              alt={photo.alt}
+              priority={isPriority}
+              placeholder="blur"
+              blurDataURL={BLUR_DATA_URL}
+              fill
+              sizes={FLEX_SIZES}
+              quality={75}
+              className="object-cover"
+              onError={() => {
+                const nextIdx = extIdxRef.current + 1;
+                if (nextIdx < EXT_CANDIDATES.length) {
+                  extIdxRef.current = nextIdx;
+                  setSrc(buildR2Src(photo.id, EXT_CANDIDATES[nextIdx]));
+                  return;
+                }
+                onImageError(photo.id);
+              }}
+            />
           </motion.div>
 
-          {/* fixed frame bars */}
+          {/* frame bars (true top/bottom border animation) */}
           <motion.div
             aria-hidden="true"
-            style={{ height: topFrameH }}
-            className="pointer-events-none absolute inset-x-0 top-0 z-[5] bg-black"
+            style={{ height: topBarH }}
+            className="pointer-events-none absolute inset-x-0 top-0 bg-black"
           />
           <motion.div
             aria-hidden="true"
-            style={{ height: bottomFrameH }}
-            className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] bg-black"
+            style={{ height: bottomBarH }}
+            className="pointer-events-none absolute inset-x-0 bottom-0 bg-black"
           />
 
-          {/* location pill anchored to the moving bottom edge */}
           {showLocation && (
             <motion.div
-              style={{ opacity: pillOpacity, y: pillY, bottom: pillBottom }}
-              className="pointer-events-none absolute right-4 sm:right-6 z-[6]"
+              style={{ opacity: pillOpacity, bottom: pillBottom }}
+              className="pointer-events-none absolute right-4 sm:right-6"
             >
               <div className="rounded-full bg-black/70 px-4 py-1.5 text-sm font-medium text-white/90 shadow-sm backdrop-blur-md">
                 <span className="line-clamp-1">{photo.locationLabel}</span>
@@ -1341,6 +1328,7 @@ function WindowFrame({
     </div>
   );
 }
+
 // ---------- GENERIC CARD (used by non-window layouts) ----------
 
 function PhotoCard({
@@ -1737,128 +1725,122 @@ function FiltersPanel({ state, onChange, onReset }: FiltersPanelProps) {
     return n;
   };
 
-  // match the experience page feel: subtle hover + press scale, no heavy shadows
-  const chipBase =
-    "rounded-full px-4 py-1.5 text-[0.95rem] font-medium " +
-    "transition-[transform,background-color,color] duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] " +
-    "focus-visible:outline-none active:scale-[0.97]";
+  const chip =
+    "rounded-full px-4 py-1.5 text-[0.95rem] focus-visible:outline-none " +
+    "transition-[transform,background-color,color] duration-200 ease-out " +
+    "will-change-transform hover:scale-[1.03] active:scale-[0.97]";
 
   return (
     <div className="flex h-full w-full flex-col p-5">
       <div className="flex-1 space-y-4 overflow-y-auto pr-1">
         <div className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.18em] text-neutral-300/90">
-            Location
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {(Object.keys(regionLabels) as Region[]).map((r) => {
-              const active = state.regions.has(r);
-              return (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() =>
-                    onChange({
-                      ...state,
-                      regions: toggle(state.regions, r),
-                    })
-                  }
-                  className={
-                    chipBase +
-                    " " +
-                    (active
-                      ? "bg-black text-white font-semibold"
-                      : "bg-black/70 text-white/80 hover:bg-black hover:text-white")
-                  }
-                >
-                  {regionLabels[r]}
-                </button>
-              );
-            })}
-          </div>
+        <p className="text-xs uppercase tracking-[0.18em] text-neutral-300/90">
+          Location
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {(Object.keys(regionLabels) as Region[]).map((r) => {
+            const active = state.regions.has(r);
+            return (
+              <button
+                key={r}
+                type="button"
+                onClick={() =>
+                  onChange({
+                    ...state,
+                    regions: toggle(state.regions, r),
+                  })
+                }
+                className={
+                  chip +
+                  " " +
+                  (active
+                    ? "bg-black text-white font-semibold"
+                    : "bg-black/70 text-white/80 hover:bg-black")
+                }
+              >
+                {regionLabels[r]}
+              </button>
+            );
+          })}
+        </div>
         </div>
 
         <div className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.18em] text-neutral-300/90">
-            Setting
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {(Object.keys(settingLabels) as Setting[]).map((s) => {
-              const active = state.settings.has(s);
-              return (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() =>
-                    onChange({
-                      ...state,
-                      settings: toggle(state.settings, s),
-                    })
-                  }
-                  className={
-                    chipBase +
-                    " " +
-                    (active
-                      ? "bg-black text-white font-semibold"
-                      : "bg-black/70 text-white/80 hover:bg-black hover:text-white")
-                  }
-                >
-                  {settingLabels[s]}
-                </button>
-              );
-            })}
-          </div>
+        <p className="text-xs uppercase tracking-[0.18em] text-neutral-300/90">
+          Setting
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {(Object.keys(settingLabels) as Setting[]).map((s) => {
+            const active = state.settings.has(s);
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() =>
+                  onChange({
+                    ...state,
+                    settings: toggle(state.settings, s),
+                  })
+                }
+                className={
+                  chip +
+                  " " +
+                  (active
+                    ? "bg-black text-white font-semibold"
+                    : "bg-black/70 text-white/80 hover:bg-black")
+                }
+              >
+                {settingLabels[s]}
+              </button>
+            );
+          })}
+        </div>
         </div>
 
         <div className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.18em] text-neutral-300/90">
-            Subject
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {(Object.keys(subjectLabels) as Subject[]).map((s) => {
-              const active = state.subjects.has(s);
-              return (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() =>
-                    onChange({
-                      ...state,
-                      subjects: toggle(state.subjects, s),
-                    })
-                  }
-                  className={
-                    chipBase +
-                    " " +
-                    (active
-                      ? "bg-black text-white font-semibold"
-                      : "bg-black/70 text-white/80 hover:bg-black hover:text-white")
-                  }
-                >
-                  {subjectLabels[s]}
-                </button>
-              );
-            })}
-          </div>
+        <p className="text-xs uppercase tracking-[0.18em] text-neutral-300/90">
+          Subject
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {(Object.keys(subjectLabels) as Subject[]).map((s) => {
+            const active = state.subjects.has(s);
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() =>
+                  onChange({
+                    ...state,
+                    subjects: toggle(state.subjects, s),
+                  })
+                }
+                className={
+                  chip +
+                  " " +
+                  (active
+                    ? "bg-black text-white font-semibold"
+                    : "bg-black/70 text-white/80 hover:bg-black")
+                }
+              >
+                {subjectLabels[s]}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* bottom-left reset */}
       <div className="pt-4">
-        <div className="flex justify-start">
-          <button
-            type="button"
-            onClick={onReset}
-            className="rounded-full bg-black px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-white transition-colors duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] hover:bg-black/80 focus-visible:outline-none active:scale-[0.98]"
-          >
-            Reset
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={onReset}
+          className="rounded-full bg-black px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-white transition-[transform,background-color] duration-200 ease-out hover:bg-black/80 hover:scale-[1.03] active:scale-[0.97] focus-visible:outline-none"
+        >
+          Reset
+        </button>
       </div>
     </div>
   );
 }
-
 
 // ---------- LIQUID-GLASS PILL (fixed dock + anchored popup + footer-avoid) ----------
 
@@ -2072,17 +2054,21 @@ function FloatingControls({
                 scale: 1,
                 visibility: "visible",
                 transition: {
-                  duration: 0.32,
-                  ease: [0.4, 0.0, 0.2, 1],
+                  type: "spring",
+                  stiffness: 420,
+                  damping: 34,
+                  mass: 0.9,
                 },
               },
               closed: {
                 opacity: 0,
-                y: 14,
-                scale: 0.97,
+                y: 12,
+                scale: 0.972,
                 transition: {
-                  duration: 0.24,
-                  ease: [0.4, 0.0, 0.2, 1],
+                  type: "spring",
+                  stiffness: 420,
+                  damping: 40,
+                  mass: 0.85,
                 },
                 transitionEnd: { visibility: "hidden" },
               },
@@ -2100,7 +2086,7 @@ function FloatingControls({
                   opacity: open && mode === "map" ? 1 : 0,
                   scale: open && mode === "map" ? 1 : 0.985,
                 }}
-                transition={{ duration: 0.28, ease: [0.4, 0.0, 0.2, 1] }}
+                transition={{ type: "spring", stiffness: 420, damping: 38, mass: 0.85 }}
                 className="absolute inset-0"
                 style={{
                   pointerEvents: open && mode === "map" ? "auto" : "none",
@@ -2119,7 +2105,7 @@ function FloatingControls({
                   opacity: open && mode === "filters" ? 1 : 0,
                   scale: open && mode === "filters" ? 1 : 0.985,
                 }}
-                transition={{ duration: 0.28, ease: [0.4, 0.0, 0.2, 1] }}
+                transition={{ type: "spring", stiffness: 420, damping: 38, mass: 0.85 }}
                 className="absolute inset-0"
                 style={{
                   pointerEvents: open && mode === "filters" ? "auto" : "none",
@@ -2378,9 +2364,8 @@ export default function PhotosPage() {
       const p0 = list[i];
       const index0 = getPhotoIndex0(p0.id);
 
-      // page should always start with a single full-width photo (never a window / offset block)
-      if (out.length === 0) {
-        offsetIds.delete(p0.id);
+      // page should always start with a single full-width, non-window photo
+      if (out.length === 0 && !isWindowPhoto(p0) && !offsetIds.has(p0.id)) {
         out.push({ kind: "full", photo: p0, index0 });
         i += 1;
         lastWasRow2 = false;
@@ -2459,7 +2444,8 @@ export default function PhotosPage() {
           >
             <div className="relative overflow-visible">
               {sections.map((s, idx) => {
-                const gap = idx === 0 ? "" : "mt-4 md:mt-6"; // tighter + consistent spacing between sections
+                // tighter + consistent spacing between all sections (incl. after window frames)
+                const gap = idx === 0 ? "" : "mt-4 md:mt-6";
                 if (s.kind === "window") {
                   return (
                     <div
@@ -2581,8 +2567,8 @@ export default function PhotosPage() {
                 );
               })}
 
-              {/* tail spacer (small): keeps footer breathing room without creating a visible gap) */}
-              <div aria-hidden className="h-6 md:h-8" />
+              {/* tail spacer: ensures the final window section can complete its bottom scroll-away */}
+              <div aria-hidden className="h-[10vh]" />
             </div>
           </div>
         </div>
