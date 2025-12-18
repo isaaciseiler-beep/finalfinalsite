@@ -115,6 +115,87 @@ function buildR2Src(id: string, ext: (typeof EXT_CANDIDATES)[number]) {
   return `${R2_BASE_URL}/${id}${ext}`;
 }
 
+// progressively warm the browser cache as the user scrolls
+// (keeps the page feeling snappy without forcing everything to be "priority")
+function useProgressiveImagePreload(photosToPreload: PhotoMeta[]) {
+  const preloadedIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!photosToPreload || photosToPreload.length === 0) return;
+
+    preloadedIdsRef.current = new Set();
+
+    let cancelled = false;
+    const list = photosToPreload.slice(0, Math.min(photosToPreload.length, 90));
+    let cursor = 0;
+
+    const scheduleIdle = (fn: () => void) => {
+      const w = window as any;
+      if (typeof w.requestIdleCallback === "function") {
+        w.requestIdleCallback(fn, { timeout: 700 });
+      } else {
+        window.setTimeout(fn, 80);
+      }
+    };
+
+    const preloadId = (id: string) => {
+      if (preloadedIdsRef.current.has(id)) return;
+      preloadedIdsRef.current.add(id);
+
+      let extIdx = 0;
+      const tryLoad = () => {
+        if (cancelled) return;
+        const img = new window.Image();
+        img.decoding = "async";
+        img.src = buildR2Src(id, EXT_CANDIDATES[extIdx]);
+        img.onerror = () => {
+          extIdx += 1;
+          if (extIdx < EXT_CANDIDATES.length) tryLoad();
+        };
+      };
+      tryLoad();
+    };
+
+    const loadUpTo = (target: number) => {
+      const t = Math.min(list.length, Math.max(0, target));
+      while (cursor < t) {
+        preloadId(list[cursor].id);
+        cursor += 1;
+      }
+    };
+
+    // immediate warm start (top of page)
+    loadUpTo(16);
+
+    const onScroll = () => {
+      const vh = window.innerHeight || 800;
+      const bands = Math.floor(window.scrollY / vh);
+      loadUpTo(16 + bands * 10);
+    };
+
+    const pump = () => {
+      if (cancelled) return;
+      loadUpTo(cursor + 6);
+      if (cursor < list.length) scheduleIdle(pump);
+    };
+
+    onScroll();
+    scheduleIdle(pump);
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    window.addEventListener("orientationchange", onScroll);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      window.removeEventListener("orientationchange", onScroll);
+    };
+  }, [photosToPreload]);
+}
+
 // ---------- overrides ----------
 
 const photoOverrides: Record<string, Partial<PhotoMeta>> = {
@@ -1138,7 +1219,7 @@ function isWindowPhoto(photo: PhotoMeta) {
   return computeLayoutVariant(photo, getPhotoIndex0(photo.id)) === "window";
 }
 
-// ---------- WINDOW (scroll-tied parallax + bottom close + anchored pill) ----------
+// ---------- WINDOW (fixed frame + scroll-past image + true bottom border) ----------
 
 function WindowFrame({
   photo,
@@ -1150,122 +1231,84 @@ function WindowFrame({
   onImageError: (id: string) => void;
 }) {
   const sectionRef = useRef<HTMLDivElement | null>(null);
-  const stickyRef = useRef<HTMLDivElement | null>(null);
   const [src, setSrc] = useState(() => buildR2Src(photo.id, EXT_CANDIDATES[0]));
   const extIdxRef = useRef(0);
-
-  const [frameH, setFrameH] = useState(0);
-  const [isSm, setIsSm] = useState(false);
 
   useEffect(() => {
     extIdxRef.current = 0;
     setSrc(buildR2Src(photo.id, EXT_CANDIDATES[0]));
   }, [photo.id]);
 
-  useEffect(() => {
-    const onResize = () => {
-      const h = stickyRef.current?.getBoundingClientRect().height;
-      setFrameH(h && Number.isFinite(h) && h > 0 ? h : window.innerHeight);
-    };
-    onResize();
-    window.addEventListener("resize", onResize);
-    window.addEventListener("orientationchange", onResize);
-    return () => {
-      window.removeEventListener("resize", onResize);
-      window.removeEventListener("orientationchange", onResize);
-    };
-  }, []);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(min-width: 640px)");
-    const on = () => setIsSm(mq.matches);
-    on();
-    try {
-      mq.addEventListener("change", on);
-      return () => mq.removeEventListener("change", on);
-    } catch {
-      mq.addListener(on);
-      return () => mq.removeListener(on);
-    }
-  }, []);
-
   const { scrollYProgress } = useScroll({
     target: sectionRef,
-    // align progress to the sticky lifetime so the bottom frame animation is visible
-    offset: ["start start", "end end"],
+    offset: ["start end", "end start"],
   });
 
-  // window borders:
-  // - open: top+bottom retract until the photo is full-screen
-  // - hold: full-screen
-  // - close: bottom border grows upward (inverse of the top open)
-  const topInsetPct = useTransform(scrollYProgress, [0, 0.22], [22, 0]);
-  const bottomInsetPct = useTransform(
-    scrollYProgress,
-    [0, 0.22, 0.78, 1],
-    [22, 0, 0, 22],
-  );
+  // "frame" is simulated with top/bottom bars.
+  // open: bars retract (22vh -> 0)
+  // hold: bars stay at 0
+  // close: bars return (0 -> 22vh) (true inverse of open)
+  // Using bars instead of clip-path keeps the frame fixed and makes the bottom border animation reliable.
+  const frameVh = useTransform(scrollYProgress, [0, 0.18, 0.82, 1], [22, 0, 0, 22]);
+  const topBarH = useMotionTemplate`${frameVh}vh`;
+  const bottomBarH = useMotionTemplate`${frameVh}vh`;
 
-  const clipPath = useMotionTemplate`inset(${topInsetPct}% 0% ${bottomInsetPct}% 0%)`;
+  // Strong "scroll past" feel: image moves behind the fixed frame across the full section.
+  const imageY = useTransform(scrollYProgress, [0, 1], ["35%", "-35%"]);
 
-  const imageY = useTransform(
-    scrollYProgress,
-    [0, 0.22, 0.78, 1],
-    ["-18%", "0%", "0%", "18%"],
-  );
-
-  // location pill:
-  // - anchored to the faux bottom border
-  // - follows the bottom border exactly as it closes (same rate)
+  // location pill is anchored to the bottom edge of the moving frame (i.e., above the bottom bar)
   const pillOpacity = useTransform(
     scrollYProgress,
-    [0, 0.22, 0.28, 0.90, 0.98, 1],
+    [0, 0.14, 0.22, 0.78, 0.86, 1],
     [0, 0, 1, 1, 0, 0],
   );
-
-  const baseBottomPx = isSm ? 24 : 16;
-  const pillBottom = useTransform(bottomInsetPct, (v) => {
-    const borderPx = (Math.max(0, v) / 100) * (frameH || 0);
-    return baseBottomPx + borderPx;
-  });
+  const pillBottom = useMotionTemplate`calc(${frameVh}vh + 16px)`;
 
   const isPriority = index0 < 14 || windowIndices.has(index0);
   const showLocation = !isHoldText(photo.locationLabel);
 
   return (
     <div id={`photo-${photo.id}`}>
-      <div ref={sectionRef} className="relative h-[210vh] md:h-[220vh]">
-        <div ref={stickyRef} className="sticky top-0 h-dvh bg-black overflow-hidden">
+      <div ref={sectionRef} className="relative h-[240vh] md:h-[260vh]">
+        <div className="sticky top-0 h-dvh bg-black overflow-hidden">
+          {/* image (moves behind frame) */}
           <motion.div
-            style={{ clipPath }}
-            className="absolute inset-0 will-change-[clip-path]"
+            style={{ y: imageY, scale: 1.22 }}
+            className="absolute inset-0 will-change-transform"
           >
-            <motion.div
-              style={{ y: imageY, scale: 1.12 }}
-              className="absolute inset-0 will-change-transform"
-            >
-              <Image
-                src={src}
-                alt={photo.alt}
-                priority={isPriority}
-                placeholder="blur"
-                blurDataURL={BLUR_DATA_URL}
-                fill
-                sizes={FLEX_SIZES}
-                quality={80}
-                className="object-cover"
-                onError={() => {
-                  const nextIdx = extIdxRef.current + 1;
-                  if (nextIdx < EXT_CANDIDATES.length) {
-                    extIdxRef.current = nextIdx;
-                    setSrc(buildR2Src(photo.id, EXT_CANDIDATES[nextIdx]));
-                    return;
-                  }
-                  onImageError(photo.id);
-                }}
-              />
-            </motion.div>
+            <Image
+              src={src}
+              alt={photo.alt}
+              priority={isPriority}
+              placeholder="blur"
+              blurDataURL={BLUR_DATA_URL}
+              fill
+              sizes={FLEX_SIZES}
+              quality={75}
+              className="object-cover"
+              onError={() => {
+                const nextIdx = extIdxRef.current + 1;
+                if (nextIdx < EXT_CANDIDATES.length) {
+                  extIdxRef.current = nextIdx;
+                  setSrc(buildR2Src(photo.id, EXT_CANDIDATES[nextIdx]));
+                  return;
+                }
+                onImageError(photo.id);
+              }}
+            />
           </motion.div>
+
+          {/* frame bars (true top/bottom border animation) */}
+          <motion.div
+            aria-hidden="true"
+            style={{ height: topBarH }}
+            className="pointer-events-none absolute inset-x-0 top-0 bg-black"
+          />
+          <motion.div
+            aria-hidden="true"
+            style={{ height: bottomBarH }}
+            className="pointer-events-none absolute inset-x-0 bottom-0 bg-black"
+          />
 
           {showLocation && (
             <motion.div
@@ -1300,7 +1343,16 @@ function PhotoCard({
   aspectClass?: string;
   sizes?: string;
 }) {
-  const isPriority = index0 < 14 || windowIndices.has(index0);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+
+  // strong parallax between rows/sections: each card drifts while you scroll past it
+  const { scrollYProgress } = useScroll({
+    target: cardRef,
+    offset: ["start end", "end start"],
+  });
+  const parallaxY = useTransform(scrollYProgress, [0, 1], [70, -70]);
+
+  const isPriority = index0 < 18 || windowIndices.has(index0);
   const showLocation = !isHoldText(photo.locationLabel);
 
   const [src, setSrc] = useState(() => buildR2Src(photo.id, EXT_CANDIDATES[0]));
@@ -1313,10 +1365,12 @@ function PhotoCard({
 
   return (
     <motion.div
+      ref={cardRef}
       id={`photo-${photo.id}`}
       className={className}
-      initial={{ opacity: 0, y: 18, scale: 0.992, filter: "blur(6px)" }}
-      whileInView={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+      style={{ y: parallaxY, willChange: "transform" }}
+      initial={{ opacity: 0, scale: 0.992, filter: "blur(6px)" }}
+      whileInView={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
       viewport={{ once: false, amount: 0.35, margin: "0px 0px -10% 0px" }}
       transition={{ duration: 0.55, ease: [0.22, 0.61, 0.36, 1] }}
     >
@@ -1331,11 +1385,12 @@ function PhotoCard({
             src={src}
             alt={photo.alt}
             priority={isPriority}
+            loading={isPriority ? "eager" : "lazy"}
             placeholder="blur"
             blurDataURL={BLUR_DATA_URL}
             fill
             sizes={sizes}
-            quality={80}
+            quality={72}
             className="h-full w-full object-cover"
             onError={() => {
               const nextIdx = extIdxRef.current + 1;
@@ -1962,18 +2017,15 @@ function FloatingControls({
             type="button"
             aria-label="scroll to top"
             onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            className="fixed left-1/2 z-[200] -translate-x-1/2 bottom-5 md:bottom-7"
+            className="fixed left-1/2 bottom-5 z-[200] -translate-x-1/2 md:bottom-7"
             style={{ y: footerLift ? -footerLift : 0 }}
             initial={{ opacity: 0, y: 10, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.96 }}
             transition={{ duration: 0.18, ease: [0.22, 0.61, 0.36, 1] }}
           >
-            <div className="relative h-11 w-11">
-              <div className="pointer-events-none absolute inset-0 rounded-full bg-black/35 backdrop-blur-md shadow-[0_10px_28px_rgba(0,0,0,0.70)]" />
-              <div className="relative flex h-full w-full items-center justify-center">
-                <ArrowUp className="h-4 w-4 text-neutral-200" />
-              </div>
+            <div className="h-11 w-11 rounded-full bg-black/35 backdrop-blur-md shadow-[0_10px_28px_rgba(0,0,0,0.70)] flex items-center justify-center">
+              <ArrowUp className="h-4 w-4 text-neutral-200" />
             </div>
           </motion.button>
         )}
@@ -2169,6 +2221,9 @@ export default function PhotosPage() {
       });
   }, [filterState, brokenPhotoIds]);
 
+  // helps reduce visible load latency as you scroll
+  useProgressiveImagePreload(filteredPhotos);
+
   const handleSelectPhoto = useCallback((id: string) => {
     const el = document.getElementById(`photo-${id}`);
     if (!el) return;
@@ -2266,23 +2321,12 @@ export default function PhotosPage() {
     const list = filteredPhotos;
     const nonWindow = list.filter((p) => !isWindowPhoto(p));
 
-    // requirement: page starts with a single full-width (non-window) photo.
-    // we force the first rendered section to be a full card.
-    const first = list[0];
-    const firstId = first?.id;
-
     // pick exactly 6 "70%" offset photos (evenly spaced across the non-window list)
-    // exclude the first photo so the page reliably starts with a full-width hero.
-    const offsetCandidates = nonWindow.filter((p) => p.id !== firstId);
-    const offsetCount = Math.min(6, offsetCandidates.length);
+    const offsetCount = Math.min(6, nonWindow.length);
     const offsetIds = new Set<string>();
     for (let k = 0; k < offsetCount; k++) {
-      const idx = Math.floor(
-        ((k + 1) * offsetCandidates.length) / (offsetCount + 1),
-      );
-      const p = offsetCandidates[
-        Math.min(offsetCandidates.length - 1, Math.max(0, idx))
-      ];
+      const idx = Math.floor(((k + 1) * nonWindow.length) / (offsetCount + 1));
+      const p = nonWindow[Math.min(nonWindow.length - 1, Math.max(0, idx))];
       offsetIds.add(p.id);
     }
 
@@ -2292,13 +2336,6 @@ export default function PhotosPage() {
     let lastWasRow2 = false;
     let offsetSide: "left" | "right" = "left";
     let lOrient: "left" | "right" = "left";
-
-    if (first) {
-      out.push({ kind: "full", photo: first, index0: getPhotoIndex0(first.id) });
-      i = 1;
-      sectionIdx = 1;
-      lastWasRow2 = false;
-    }
 
     const canUse = (p: PhotoMeta | undefined) => {
       if (!p) return false;
@@ -2310,6 +2347,15 @@ export default function PhotosPage() {
     while (i < list.length) {
       const p0 = list[i];
       const index0 = getPhotoIndex0(p0.id);
+
+      // page should always start with a single full-width, non-window photo
+      if (out.length === 0 && !isWindowPhoto(p0) && !offsetIds.has(p0.id)) {
+        out.push({ kind: "full", photo: p0, index0 });
+        i += 1;
+        lastWasRow2 = false;
+        sectionIdx += 1;
+        continue;
+      }
 
       if (isWindowPhoto(p0)) {
         out.push({ kind: "window", photo: p0, index0 });
@@ -2385,7 +2431,10 @@ export default function PhotosPage() {
                 const gap = idx === 0 ? "" : "mt-12 md:mt-20"; // doubled spacing between sections
                 if (s.kind === "window") {
                   return (
-                    <div key={`window-${s.photo.id}`} className={gap}>
+                    <div
+                      key={`window-${s.photo.id}`}
+                      className={[gap, "-mx-4 sm:-mx-6"].join(" ")}
+                    >
                       <WindowFrame
                         photo={s.photo}
                         index0={s.index0}
@@ -2403,18 +2452,15 @@ export default function PhotosPage() {
                   return (
                     <div key={`L-${a.id}-${b.id}-${c.id}`} className={gap}>
                       <div className="grid grid-cols-12 gap-6 md:gap-10 md:grid-rows-2">
-                        {/* L / backward-L: 3 photos only, and never smaller than a double-row half */}
+                        {/* 3-photo L / backward-L using ONLY half-width tiles (never smaller than row2) */}
                         <PhotoCard
                           photo={a}
                           index0={ia}
                           onImageError={reportBroken}
                           sizes={HALF_SIZES}
-                          aspectClass="aspect-[16/9] md:aspect-auto md:h-full"
                           className={[
-                            "col-span-12",
-                            isLeft
-                              ? "md:col-span-6 md:row-span-2"
-                              : "md:col-span-6 md:col-start-7 md:row-span-2",
+                            "col-span-12 md:col-span-6 md:row-start-1",
+                            isLeft ? "md:col-start-1" : "md:col-start-7",
                           ].join(" ")}
                         />
 
@@ -2424,8 +2470,8 @@ export default function PhotosPage() {
                           onImageError={reportBroken}
                           sizes={HALF_SIZES}
                           className={[
-                            "col-span-12 md:col-span-6 md:row-start-1",
-                            isLeft ? "md:col-start-7" : "md:col-start-1",
+                            "col-span-12 md:col-span-6 md:row-start-2",
+                            isLeft ? "md:col-start-1" : "md:col-start-7",
                           ].join(" ")}
                         />
 
@@ -2435,7 +2481,7 @@ export default function PhotosPage() {
                           onImageError={reportBroken}
                           sizes={HALF_SIZES}
                           className={[
-                            "col-span-12 md:col-span-6 md:row-start-2",
+                            "col-span-12 md:col-span-6 md:row-start-1",
                             isLeft ? "md:col-start-7" : "md:col-start-1",
                           ].join(" ")}
                         />
