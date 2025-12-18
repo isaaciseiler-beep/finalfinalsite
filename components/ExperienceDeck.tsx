@@ -145,25 +145,25 @@ function TimelineEntry({ item }: { item: ExperienceWithYear }) {
     (isCommsDirector ? DEFAULT_COMMS_PRESS_HITS : []);
 
   return (
-    <article className="relative text-left">
+    <article className="relative text-left tracking-normal">
       <header className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           {/* ~15% bigger */}
-          <h3 className="text-[1.45rem] font-semibold tracking-tight md:text-[1.75rem]">
+          <h3 className="text-[1.45rem] font-semibold tracking-normal md:text-[1.75rem]">
             {item.role}
           </h3>
-          <p className="mt-1 text-sm text-muted">{item.org}</p>
+          <p className="mt-1 text-sm leading-normal text-muted">{item.org}</p>
         </div>
 
         {/* grey pill date (no outline) */}
         <div className="shrink-0">
-          <span className="inline-flex rounded-full bg-neutral-800/70 px-3 py-1 text-[11px] font-medium tracking-[0.12em] text-neutral-200">
+          <span className="inline-flex rounded-full bg-neutral-800/70 px-3 py-1 text-[11px] font-medium uppercase tracking-normal text-neutral-200">
             {item.dates}
           </span>
         </div>
       </header>
 
-      <p className="mt-4 text-sm leading-relaxed text-muted">{item.summary}</p>
+      <p className="mt-4 text-sm leading-normal tracking-normal text-muted">{item.summary}</p>
 
       {/* Link button (between entry and press hits/photos) */}
       {item.link && (
@@ -176,14 +176,14 @@ function TimelineEntry({ item }: { item: ExperienceWithYear }) {
 
       {/* Press hits — ONLY shows when present (or for Comms Director fallback). */}
       {pressHits.length > 0 && (
-        <div className="mt-5 -mr-6">
+        <div className="mt-5 -mr-4 sm:-mr-6">
           <PressHitsRail hits={pressHits} ariaLabel="press hits" />
         </div>
       )}
 
       {/* Scrollable photos — bleeds off the right edge */}
       {photos.length > 0 && (
-        <div className="mt-6 -mr-6">
+        <div className="mt-5 -mr-4 sm:-mr-6">
           <PhotoRail photos={photos} ariaLabel={`${item.role} photos`} />
         </div>
       )}
@@ -204,21 +204,21 @@ function ResumeLinkButton({
       target="_blank"
       rel="noopener noreferrer"
       className={[
-        "group inline-flex max-w-2xl items-start",
-        "rounded-2xl bg-neutral-900/40 px-4 py-3",
-        "text-sm leading-snug text-neutral-100",
-        "no-underline transition-colors hover:bg-neutral-800/60 hover:no-underline",
+        "group inline-flex max-w-2xl items-center gap-2",
+        "rounded-full bg-neutral-800/70 px-4 py-2.5",
+        "text-sm leading-normal tracking-normal",
+        "text-neutral-200 ring-1 ring-neutral-700/60",
+        "no-underline transition-colors duration-200 hover:bg-white hover:text-neutral-900 hover:no-underline",
+        "hover:shadow-[0_0_0_1px_rgba(255,255,255,0.92),0_0_35px_rgba(255,255,255,0.10)]",
         "focus-visible:outline-none",
       ].join(" ")}
     >
-      <span className="text-muted group-hover:text-foreground">
-        {children}
-        <span
-          aria-hidden
-          className="ml-1 inline-block transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
-        >
-          ↗
-        </span>
+      <span className="min-w-0 text-left">{children}</span>
+      <span
+        aria-hidden
+        className="ml-1 shrink-0 inline-block transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+      >
+        ↗
       </span>
     </Link>
   );
@@ -253,7 +253,7 @@ function CarouselNavButton({
 
 // ---------- Press hits rail (scrollable circles) ----------
 
-const HIT_DIAMETER = 72;
+const HIT_DIAMETER = 216;
 const HIT_GAP = 16;
 
 function PressHitsRail({ hits, ariaLabel }: { hits: PressHit[]; ariaLabel: string }) {
@@ -301,7 +301,7 @@ function PressHitsRail({ hits, ariaLabel }: { hits: PressHit[]; ariaLabel: strin
       <div ref={viewportRef} className="overflow-hidden">
         <motion.div
           className="flex gap-4"
-          animate={{ x: -index * (HIT_DIAMETER + HIT_GAP) }}
+          animate={{ x: -Math.min(index * (HIT_DIAMETER + HIT_GAP), Math.max(0, hits.length * HIT_DIAMETER + Math.max(0, hits.length - 1) * HIT_GAP - viewportW)) }}
           transition={slideTransition}
           drag="x"
           dragConstraints={{ left: 0, right: 0 }}
@@ -314,7 +314,7 @@ function PressHitsRail({ hits, ariaLabel }: { hits: PressHit[]; ariaLabel: strin
           {hits.map((hit, i) => {
             const Circle = (
               <article
-                className="group relative grid flex-shrink-0 place-items-center overflow-hidden rounded-full bg-card shadow-[0_0_18px_rgba(0,0,0,0.35)]"
+                className="group relative grid flex-shrink-0 place-items-center overflow-hidden rounded-full bg-card ring-1 ring-neutral-700/60 shadow-[0_0_22px_rgba(0,0,0,0.38)]"
                 style={{ width: HIT_DIAMETER, height: HIT_DIAMETER }}
               >
                 <div className="relative h-full w-full">
@@ -322,12 +322,12 @@ function PressHitsRail({ hits, ariaLabel }: { hits: PressHit[]; ariaLabel: strin
                     src={hit.logo}
                     alt={hit.publisher.replace("\n", " ")}
                     fill
-                    className="object-contain p-4"
+                    className="object-contain p-10"
                     sizes={`${HIT_DIAMETER}px`}
                   />
                   <div className="pointer-events-none absolute inset-0 bg-black/0 transition-colors duration-200 group-hover:bg-black/35" />
-                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-2 text-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                    <span className="whitespace-pre-line text-[10px] font-medium leading-tight text-white">
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-10 text-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                    <span className="whitespace-pre-line text-[13px] font-medium leading-tight text-white">
                       {hit.publisher}
                     </span>
                   </div>
@@ -430,7 +430,7 @@ function PhotoRail({ photos, ariaLabel }: { photos: string[]; ariaLabel: string 
       <div ref={viewportRef} className="overflow-hidden">
         <motion.div
           className="flex gap-4"
-          animate={{ x: -index * (PHOTO_W + PHOTO_GAP) }}
+          animate={{ x: -Math.min(index * (PHOTO_W + PHOTO_GAP), Math.max(0, photos.length * PHOTO_W + Math.max(0, photos.length - 1) * PHOTO_GAP - viewportW)) }}
           transition={slideTransition}
           drag="x"
           dragConstraints={{ left: 0, right: 0 }}
