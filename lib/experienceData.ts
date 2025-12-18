@@ -30,6 +30,12 @@ const raw: ExperienceItem[] = [
     link: "https://fulbright.org/",
     link_text:
       "Fulbright is one of the most competitive fellowship programs in the world. Learn more",
+    photos: [
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_8.JPG",
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_29.JPG",
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_125.JPG",
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_126.JPG",
+    ],
     image: null,
   },
   {
@@ -41,6 +47,11 @@ const raw: ExperienceItem[] = [
     link: "https://chatgpt.com/use-cases/students",
     link_text:
       "He co-developed 100 uses for ChatGPT in higher education. Learn more",
+    photos: [
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/press/pulse.jpg",
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/press/study-mode.jpg",
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/press/100chats.jpg",
+    ],
     image: null,
   },
   {
@@ -49,6 +60,12 @@ const raw: ExperienceItem[] = [
     org: "Council for State Governments, Center for Innovation",
     summary:
       "Over a few short weeks, Isaac designed, built, and presented the first-ever state government AI adoption index, measuring across 900 data inputs how 56 state and territory governments across the United States are embracing generative artificial intelligence.",
+    photos: [
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_82.JPG",
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_83.JPG",
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_87.JPG",
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_9.JPG",
+    ],
     image: null,
   },
   {
@@ -60,6 +77,12 @@ const raw: ExperienceItem[] = [
     link: "https://www.boehringer-ingelheim.com/annualreport/2024/facts-and-figures/",
     link_text:
       "Boehringer Ingelheim is one of the largest life sciences companies in the world. Learn more",
+    photos: [
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_2.JPG",
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_4.JPG",
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_10.JPG",
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_98.JPG",
+    ],
     image: null,
   },
   {
@@ -71,6 +94,12 @@ const raw: ExperienceItem[] = [
     link: "https://www.allysonfortustin.com/",
     link_text:
       "Explore one of the campaigns he consulted for (including a site he built)",
+    photos: [
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_5.JPG",
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_7.JPG",
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_14.JPG",
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_16.JPG",
+    ],
     image: null,
   },
   {
@@ -129,6 +158,12 @@ const raw: ExperienceItem[] = [
         logo: "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/media-portfolio/19th.png",
       },
     ],
+    photos: [
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_9.JPG",
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_82.JPG",
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_83.JPG",
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_87.JPG",
+    ],
     image: null,
   },
   {
@@ -139,6 +174,11 @@ const raw: ExperienceItem[] = [
       "Isaac began as a fellow on one of the most high-profile congressional races of 2022 and quickly moved up to oversee the campaign’s digital program. Through a rapidly scaled social media strategy, he organically reached over 1 million people weekly and generated tens of thousands in grassroots fundraising. In addition, he served as the logistical backbone of the campaign—coordinating logistics for 100+ events, including events with governors, members of Congress, and cabinet secretaries.",
     link: "https://www.vanityfair.com/news/2022/06/democrats-midterms-house-michigan-districts-scholten-meijer",
     link_text: "Read the Vanity Fair piece on the primary campaign",
+    photos: [
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_7.JPG",
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_10.JPG",
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_116.JPG",
+    ],
     image: null,
   },
   {
@@ -149,6 +189,11 @@ const raw: ExperienceItem[] = [
       "Isaac worked on a small, international research team processing and analyzing quantitative data for the largest consortium of nonprofit news organizations in the world. He also partnered with INN contractors on research into how stakeholders access news on digital and social platforms.",
     link: "https://inn.org/research/inn-index/inn-index-2022/inn-index-2022/",
     link_text: "See the 2022 INN Index report",
+    photos: [
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_12.JPG",
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_13.JPG",
+    "https://pub-41d52824b0bb4f44898c39e1c3c63cb8.r2.dev/photos/image_28.JPG",
+    ],
     image: null,
   },
 ];
