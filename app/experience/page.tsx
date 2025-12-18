@@ -167,7 +167,7 @@ export default function ExperiencePage() {
         <div className="px-4 sm:px-6 pt-[112px] md:pt-[112px]">
           {/* education */}
           <Parallax amount={-70}>
-            <section className="pb-5 md:pb-6">
+            <section className="pb-6 md:pb-8">
               <EducationPopup open={eduOpen} onToggle={() => setEduOpen((v) => !v)} />
             </section>
           </Parallax>
@@ -175,7 +175,7 @@ export default function ExperiencePage() {
           {/* news header */}
           {hasPress && (
             <Parallax amount={-55}>
-              <section className="mb-4 md:mb-5">
+              <section className="mb-6 md:mb-8">
                 <div className="flex justify-start">
                   <h2 className="text-left text-4xl font-normal leading-none tracking-tight md:text-6xl">
                     News
@@ -188,17 +188,17 @@ export default function ExperiencePage() {
           {/* press carousel — bleeds off the right edge */}
           {hasPress && (
             <Parallax amount={-90}>
-              <section className="mb-7 md:mb-8">
+              <section className="mb-6 md:mb-8">
                 <div className="relative">
                   {/* left fade only (no right bezel) */}
                   <div className="pointer-events-none absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-background via-background/70 to-transparent sm:w-16 md:w-20" />
 
                   {/* cancel the page's right padding only for this scroller */}
-                  <div className="-mr-6">
+                  <div className="-mr-4 sm:-mr-6">
                     <div ref={viewportRef} className="overflow-hidden">
                       <motion.div
                         className="flex gap-4"
-                        animate={{ x: -pressIndex * (CARD_WIDTH + CARD_GAP) }}
+                        animate={{ x: -Math.min(pressIndex * (CARD_WIDTH + CARD_GAP), Math.max(0, pressCount * CARD_WIDTH + Math.max(0, pressCount - 1) * CARD_GAP - viewportW)) }}
                         transition={slideTransition}
                         drag="x"
                         dragConstraints={{ left: 0, right: 0 }}
@@ -282,7 +282,7 @@ export default function ExperiencePage() {
 
           {/* resume header */}
           <Parallax amount={-55}>
-            <section className="mb-4 md:mb-5">
+            <section className="mb-6 md:mb-8">
               <div className="flex justify-start">
                 <h2 className="text-left text-4xl font-normal leading-none tracking-tight md:text-6xl">
                   Resume
