@@ -1734,98 +1734,99 @@ function FiltersPanel({ state, onChange, onReset }: FiltersPanelProps) {
     <div className="flex h-full w-full flex-col p-5">
       <div className="flex-1 space-y-4 overflow-y-auto pr-1">
         <div className="space-y-2">
-        <p className="text-xs uppercase tracking-[0.18em] text-neutral-300/90">
-          Location
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {(Object.keys(regionLabels) as Region[]).map((r) => {
-            const active = state.regions.has(r);
-            return (
-              <button
-                key={r}
-                type="button"
-                onClick={() =>
-                  onChange({
-                    ...state,
-                    regions: toggle(state.regions, r),
-                  })
-                }
-                className={
-                  chip +
-                  " " +
-                  (active
-                    ? "bg-black text-white font-semibold"
-                    : "bg-black/70 text-white/80 hover:bg-black")
-                }
-              >
-                {regionLabels[r]}
-              </button>
-            );
-          })}
-        </div>
-        </div>
-
-        <div className="space-y-2">
-        <p className="text-xs uppercase tracking-[0.18em] text-neutral-300/90">
-          Setting
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {(Object.keys(settingLabels) as Setting[]).map((s) => {
-            const active = state.settings.has(s);
-            return (
-              <button
-                key={s}
-                type="button"
-                onClick={() =>
-                  onChange({
-                    ...state,
-                    settings: toggle(state.settings, s),
-                  })
-                }
-                className={
-                  chip +
-                  " " +
-                  (active
-                    ? "bg-black text-white font-semibold"
-                    : "bg-black/70 text-white/80 hover:bg-black")
-                }
-              >
-                {settingLabels[s]}
-              </button>
-            );
-          })}
-        </div>
+          <p className="text-xs uppercase tracking-[0.18em] text-neutral-300/90">
+            Location
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {(Object.keys(regionLabels) as Region[]).map((r) => {
+              const active = state.regions.has(r);
+              return (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() =>
+                    onChange({
+                      ...state,
+                      regions: toggle(state.regions, r),
+                    })
+                  }
+                  className={
+                    chip +
+                    " " +
+                    (active
+                      ? "bg-black text-white font-semibold"
+                      : "bg-black/70 text-white/80 hover:bg-black")
+                  }
+                >
+                  {regionLabels[r]}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div className="space-y-2">
-        <p className="text-xs uppercase tracking-[0.18em] text-neutral-300/90">
-          Subject
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {(Object.keys(subjectLabels) as Subject[]).map((s) => {
-            const active = state.subjects.has(s);
-            return (
-              <button
-                key={s}
-                type="button"
-                onClick={() =>
-                  onChange({
-                    ...state,
-                    subjects: toggle(state.subjects, s),
-                  })
-                }
-                className={
-                  chip +
-                  " " +
-                  (active
-                    ? "bg-black text-white font-semibold"
-                    : "bg-black/70 text-white/80 hover:bg-black")
-                }
-              >
-                {subjectLabels[s]}
-              </button>
-            );
-          })}
+          <p className="text-xs uppercase tracking-[0.18em] text-neutral-300/90">
+            Setting
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {(Object.keys(settingLabels) as Setting[]).map((s) => {
+              const active = state.settings.has(s);
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() =>
+                    onChange({
+                      ...state,
+                      settings: toggle(state.settings, s),
+                    })
+                  }
+                  className={
+                    chip +
+                    " " +
+                    (active
+                      ? "bg-black text-white font-semibold"
+                      : "bg-black/70 text-white/80 hover:bg-black")
+                  }
+                >
+                  {settingLabels[s]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-xs uppercase tracking-[0.18em] text-neutral-300/90">
+            Subject
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {(Object.keys(subjectLabels) as Subject[]).map((s) => {
+              const active = state.subjects.has(s);
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() =>
+                    onChange({
+                      ...state,
+                      subjects: toggle(state.subjects, s),
+                    })
+                  }
+                  className={
+                    chip +
+                    " " +
+                    (active
+                      ? "bg-black text-white font-semibold"
+                      : "bg-black/70 text-white/80 hover:bg-black")
+                  }
+                >
+                  {subjectLabels[s]}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
