@@ -1,5 +1,4 @@
 "use client";
-
 import * as React from "react";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence, LayoutGroup, useReducedMotion } from "framer-motion";
@@ -14,6 +13,7 @@ const nav: NavItem[] = [
   { href: "/experience", label: "Experience" },
   { href: "/photos", label: "Photos" },
   { href: "/contact", label: "Contact" },
+  { href: "/blog", label: "Blog" },
   {
     href: "https://www.linkedin.com/in/isaacseiler/",
     label: "LinkedIn",
@@ -27,9 +27,10 @@ const PREVIEW: Record<string, { badge: string; title: string; blurb: string }> =
   "/experience": { badge: "resume", title: "experience", blurb: "Stuff I’ve done and places I’ve worked" },
   "/photos": { badge: "gallery", title: "photos", blurb: "Pictures I love of places I love" },
   "/contact": { badge: "reach out", title: "contact", blurb: "Get in touch and let’s connect" },
+  "/blog": { badge: "notes", title: "blog", blurb: "Thoughts and opinions" },
 };
 
-// menu slide ease
+// menu slide ease (no bounce)
 const EASE_DECEL: [number, number, number, number] = [0.05, 0.7, 0.12, 1];
 
 // how many row-heights to skip before first menu item
@@ -41,52 +42,85 @@ export default function Sidebar() {
   const reduce = !!useReducedMotion();
 
   const [hoverHref, setHoverHref] = React.useState<string | null>(null);
-  const [rowSpacer, setRowSpacer] = React.useState<number>(0);
+
+  // Keep the highlight pill alive independently of hoverHref so we can
+  // fade it out without any layout/opacity “blips”.
+  const [pillHref, setPillHref] = React.useState<string | null>(null);
+  const [pillVisible, setPillVisible] = React.useState(false);
+
+  // top padding as “rows” (start with a stable fallback to avoid first-paint jump)
+  const [rowSpacer, setRowSpacer] = React.useState<number>(() => 30 * TOP_OFFSET_ROWS);
 
   // Close only when leaving the fixed sidebar (stable bounds)
   const leaveTimer = React.useRef<number | null>(null);
-  const clearLeaveTimer = () => {
+  const cleanupTimer = React.useRef<number | null>(null);
+  const clearLeaveTimers = () => {
     if (leaveTimer.current) window.clearTimeout(leaveTimer.current);
-    leaveTimer.current = null;
+    if (cleanupTimer.current) window.clearTimeout(cleanupTimer.current);
+    leaveTimer.current = cleanupTimer.current = null;
   };
 
-  const openInternal = (href: string) => {
-    clearLeaveTimer();
+  const openRow = (href: string) => {
+    clearLeaveTimers();
     setHoverHref(href);
-  };
-
-  const openExternal = () => {
-    clearLeaveTimer();
-    setHoverHref(null);
+    setPillHref(href);
+    setPillVisible(true);
   };
 
   const closeAll = () => {
-    clearLeaveTimer();
-    leaveTimer.current = window.setTimeout(() => setHoverHref(null), reduce ? 0 : 60);
+    clearLeaveTimers();
+
+    const leaveDelay = reduce ? 0 : 60;
+    const fadeMs = reduce ? 0 : 160;
+
+    leaveTimer.current = window.setTimeout(() => {
+      setHoverHref(null);
+      setPillVisible(false);
+
+      cleanupTimer.current = window.setTimeout(() => {
+        setPillHref(null);
+      }, fadeMs);
+    }, leaveDelay);
   };
 
-  // measure a row once and set a spacer that pushes the list down
-  React.useEffect(() => {
+  // Measure a row once and set a spacer that pushes the list down.
+  // Use layout timing + observers to avoid any “jump” on mount/resizes.
+  React.useLayoutEffect(() => {
+    if (!open) return;
+
+    const el = document.querySelector<HTMLElement>('a[href="/about"]');
+    if (!el) return;
+
+    let raf = 0;
     const measure = () => {
-      const el = document.querySelector<HTMLAnchorElement>('a[href="/about"]');
-      if (!el) {
-        setRowSpacer(30 * TOP_OFFSET_ROWS);
-        return;
-      }
-      const r = el.getBoundingClientRect();
-      const perRow = r.height + 6; // gap-1 ~= 4px, + a little slack
-      setRowSpacer(Math.round(perRow * TOP_OFFSET_ROWS));
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const r = el.getBoundingClientRect();
+        const perRow = r.height + 6; // gap-1 ~= 4px, + slack
+        setRowSpacer(Math.round(perRow * TOP_OFFSET_ROWS));
+      });
     };
 
-    const id = window.requestAnimationFrame(measure);
-    return () => window.cancelAnimationFrame(id);
-  }, []);
+    measure();
+
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    window.addEventListener("resize", measure, { passive: true });
+
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [open]);
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        clearLeaveTimer();
+        clearLeaveTimers();
         setHoverHref(null);
+        setPillVisible(false);
+        setPillHref(null);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -94,11 +128,22 @@ export default function Sidebar() {
   }, []);
 
   React.useEffect(() => {
+    // navigating should never leave hover state stuck
+    clearLeaveTimers();
     setHoverHref(null);
+    setPillVisible(false);
+    setPillHref(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
   React.useEffect(() => {
-    if (!open) setHoverHref(null);
+    if (!open) {
+      clearLeaveTimers();
+      setHoverHref(null);
+      setPillVisible(false);
+      setPillHref(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   return (
@@ -112,7 +157,7 @@ export default function Sidebar() {
           transition={reduce ? { duration: 0.2 } : { duration: 0.42, ease: EASE_DECEL }}
           className="fixed left-0 top-0 z-[50] h-dvh w-[240px] bg-black not-prose pointer-events-auto"
           style={{ isolation: "isolate" }}
-          onPointerEnter={clearLeaveTimer}
+          onPointerEnter={clearLeaveTimers}
           onPointerLeave={closeAll}
         >
           <div className="relative z-[1] flex h-full flex-col px-4 py-6">
@@ -123,7 +168,7 @@ export default function Sidebar() {
                 {nav.map((item) => {
                   const active = pathname === item.href;
                   const isExternal = !!item.external;
-                  const openCard = hoverHref === item.href && !isExternal;
+                  const highlighted = hoverHref === item.href;
                   const p = PREVIEW[item.href as keyof typeof PREVIEW];
 
                   return (
@@ -133,12 +178,14 @@ export default function Sidebar() {
                       label={item.label}
                       active={active}
                       external={isExternal}
-                      open={openCard}
+                      open={highlighted}
+                      pill={pillHref === item.href}
+                      pillVisible={pillVisible}
                       badge={p?.badge}
                       title={p?.title}
                       blurb={p?.blurb}
-                      onEnterInternal={() => openInternal(item.href)}
-                      onEnterExternal={openExternal}
+                      onEnterInternal={() => openRow(item.href)}
+                      onEnterExternal={() => openRow(item.href)}
                       onLeaveAll={closeAll}
                       reduceMotion={reduce}
                     />
