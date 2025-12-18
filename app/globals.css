@@ -31,11 +31,10 @@ h2 { @apply tracking-tight text-[clamp(20px,3.5vw,28px)] font-medium; }
 p, li { @apply tracking-tight; }
 
 /* ----------------------------------------------
-   contact page: smooth plates -> full blob swap
+   contact page: refined plates + idle-still gel blobs
    ---------------------------------------------- */
 
 .contact-tile {
-  /* critical: anchor must be block-level so width/height works */
   display: block;
 
   /* pointer-driven vars */
@@ -46,21 +45,24 @@ p, li { @apply tracking-tight; }
   --rx: 0deg;
   --ry: 0deg;
 
-  /* blob + ink */
+  /* blob */
   --blob: #ffffff;
-  --ink: rgba(255,255,255,0.92);
-  --inkHi: rgba(255,255,255,0.92);
-  --inkLo: rgba(0,0,0,0.28);
+  --blob-rgb: 255 255 255;
 
-  /* per-tile gradient bias */
-  --plate-x: 0%;
-  --plate-y: 0%;
+  /* per-tile wave paths */
+  --waveA-x0: -22%;
+  --waveA-y0: 0%;
+  --waveA-x1: 30%;
+  --waveA-y1: 0%;
 
-  /* per-tile wave timing (desync via negative delays) */
-  --waveA-dur: 14.8s;
-  --waveB-dur: 17.6s;
-  --pulse-dur: 12.9s;
+  --waveB-x0: 18%;
+  --waveB-y0: -8%;
+  --waveB-x1: -14%;
+  --waveB-y1: 8%;
 
+  --waveA-dur: 15.2s;
+  --waveB-dur: 18.1s;
+  --pulse-dur: 12.8s;
   --waveA-delay: 0s;
   --waveB-delay: 0s;
   --pulse-delay: 0s;
@@ -71,8 +73,16 @@ p, li { @apply tracking-tight; }
   cursor: pointer;
 
   border-radius: 28px;
-  background: transparent;
-  transition: transform 160ms ease;
+  transition: transform 160ms ease, background 240ms ease, border-color 240ms ease;
+
+  /* underlay so there is never a hard black gap */
+  background:
+    radial-gradient(120% 140% at 50% 15%, rgba(255,255,255,0.04), transparent 70%),
+    radial-gradient(180% 220% at 80% 110%, rgba(255,255,255,0.02), transparent 70%),
+    #050505;
+
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow: 0 0 26px rgba(0,0,0,0.45);
 }
 
 .contact-tile:active { transform: scale(0.985); }
@@ -89,42 +99,57 @@ p, li { @apply tracking-tight; }
   }
 }
 
-/* different “seeds” so gradients + timing differ between tiles */
+/* desync + different wave paths per tile */
 .contact-tile[data-seed="connect"] {
-  --plate-x: -10%;
-  --plate-y: 5%;
+  --waveA-x0: -26%;
+  --waveA-y0: 2%;
+  --waveA-x1: 28%;
+  --waveA-y1: -1%;
 
-  --waveA-dur: 15.4s;
-  --waveB-dur: 18.6s;
-  --pulse-dur: 13.6s;
+  --waveB-x0: 14%;
+  --waveB-y0: -10%;
+  --waveB-x1: -16%;
+  --waveB-y1: 10%;
 
-  --waveA-delay: -2.7s;
-  --waveB-delay: -6.1s;
-  --pulse-delay: -3.4s;
+  --waveA-dur: 16.1s;
+  --waveB-dur: 19.4s;
+  --pulse-dur: 13.4s;
 
-  --ink: rgba(255,255,255,0.92);
-  --inkHi: rgba(255,255,255,0.94);
-  --inkLo: rgba(0,0,0,0.30);
+  --waveA-delay: -3.1s;
+  --waveB-delay: -7.7s;
+  --pulse-delay: -4.2s;
 }
 
 .contact-tile[data-seed="email"] {
-  --plate-x: 8%;
-  --plate-y: -3%;
+  --waveA-x0: -12%;
+  --waveA-y0: -10%;
+  --waveA-x1: 24%;
+  --waveA-y1: 12%;
 
-  --waveA-dur: 14.2s;
-  --waveB-dur: 17.2s;
-  --pulse-dur: 12.2s;
+  --waveB-x0: 22%;
+  --waveB-y0: -2%;
+  --waveB-x1: -8%;
+  --waveB-y1: 10%;
 
-  --waveA-delay: -7.3s;
-  --waveB-delay: -3.9s;
-  --pulse-delay: -5.2s;
+  --waveA-dur: 14.6s;
+  --waveB-dur: 17.3s;
+  --pulse-dur: 12.1s;
 
-  --ink: rgba(10,10,12,0.78);
-  --inkHi: rgba(255,255,255,0.28);
-  --inkLo: rgba(0,0,0,0.46);
+  --waveA-delay: -8.3s;
+  --waveB-delay: -2.9s;
+  --pulse-delay: -6.0s;
 }
 
-/* plate = smoother dynamic gradient (avoid hard stops) */
+/* on hover, tint the underlay slightly toward the blob color (prevents “hard black border” feel) */
+.contact-tile:hover {
+  border-color: rgba(255,255,255,0.08);
+  background:
+    radial-gradient(120% 140% at 50% 18%, rgba(255,255,255,0.045), transparent 70%),
+    radial-gradient(120% 140% at 50% 55%, rgba(var(--blob-rgb) / 0.10), transparent 72%),
+    #050505;
+}
+
+/* plate (smooth + heavy blur layers to avoid banding) */
 .contact-tile__plate {
   position: absolute;
   inset: 0;
@@ -133,97 +158,63 @@ p, li { @apply tracking-tight; }
   z-index: 0;
 
   background:
-    radial-gradient(
-      160% 220% at calc(18% + var(--plate-x)) calc(22% + var(--plate-y)),
-      rgba(255,255,255,0.085) 0%,
-      rgba(255,255,255,0.045) 34%,
-      rgba(255,255,255,0.018) 52%,
-      rgba(255,255,255,0.0) 78%
-    ),
-    radial-gradient(
-      220% 260% at calc(82% - var(--plate-x)) calc(112% - var(--plate-y)),
-      rgba(255,255,255,0.040) 0%,
-      rgba(255,255,255,0.020) 42%,
-      rgba(255,255,255,0.0) 74%
-    ),
-    linear-gradient(
-      180deg,
-      rgba(255,255,255,0.028) 0%,
-      rgba(0,0,0,0.0) 72%
-    ),
-    #050505;
+    radial-gradient(160% 220% at 20% 22%, rgba(255,255,255,0.06), rgba(255,255,255,0.0) 78%),
+    radial-gradient(240% 260% at 82% 112%, rgba(255,255,255,0.03), rgba(255,255,255,0.0) 74%),
+    linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.0) 70%);
 
   box-shadow:
-    inset 0 0 0 1px rgba(255,255,255,0.050),
-    inset 0 -30px 90px rgba(0,0,0,0.58),
-    0 0 26px rgba(0,0,0,0.45);
+    inset 0 0 0 1px rgba(255,255,255,0.04),
+    inset 0 -30px 90px rgba(0,0,0,0.58);
 
   opacity: 1;
   transform: translate3d(0,0,0);
-  transition:
-    opacity 220ms ease,
-    transform 520ms cubic-bezier(0.2, 0.9, 0.2, 1.1);
+  transition: opacity 220ms ease, transform 520ms cubic-bezier(0.2, 0.9, 0.2, 1.1);
 }
 
 .contact-tile__plate::before,
 .contact-tile__plate::after {
   content: "";
   position: absolute;
-  inset: -18%;
+  inset: -22%;
   border-radius: inherit;
   pointer-events: none;
   will-change: transform, opacity;
   mix-blend-mode: screen;
 }
 
-/* wave layer a */
 .contact-tile__plate::before {
-  background: radial-gradient(
-    170% 240% at 0% 62%,
-    rgba(255,255,255,0.090) 0%,
-    rgba(255,255,255,0.050) 36%,
-    rgba(255,255,255,0.018) 56%,
-    rgba(255,255,255,0.0) 80%
-  );
-  filter: blur(26px);
-  opacity: 0.62;
-  transform: translate3d(-22%, 0, 0);
+  background: radial-gradient(170% 240% at 0% 62%, rgba(255,255,255,0.085), rgba(255,255,255,0.0) 78%);
+  filter: blur(34px);
+  opacity: 0.58;
+  transform: translate3d(var(--waveA-x0), var(--waveA-y0), 0);
   animation:
     contactWaveA var(--waveA-dur) ease-in-out var(--waveA-delay) infinite alternate,
     contactPulse var(--pulse-dur) ease-in-out var(--pulse-delay) infinite;
 }
 
-/* wave layer b */
 .contact-tile__plate::after {
-  background: radial-gradient(
-    160% 230% at 100% 40%,
-    rgba(255,255,255,0.075) 0%,
-    rgba(255,255,255,0.040) 34%,
-    rgba(255,255,255,0.015) 56%,
-    rgba(255,255,255,0.0) 80%
-  );
-  filter: blur(28px);
-  opacity: 0.55;
-  transform: translate3d(18%, -8%, 0);
+  background: radial-gradient(160% 230% at 100% 40%, rgba(255,255,255,0.075), rgba(255,255,255,0.0) 80%);
+  filter: blur(36px);
+  opacity: 0.52;
+  transform: translate3d(var(--waveB-x0), var(--waveB-y0), 0);
   animation:
     contactWaveB var(--waveB-dur) ease-in-out var(--waveB-delay) infinite alternate,
-    contactPulse calc(var(--pulse-dur) + 1.3s) ease-in-out calc(var(--pulse-delay) - 1.1s) infinite;
+    contactPulse calc(var(--pulse-dur) + 1.1s) ease-in-out calc(var(--pulse-delay) - 0.9s) infinite;
 }
 
-/* full swap: hide plate completely on hover */
 .contact-tile:hover .contact-tile__plate {
-  opacity: 0;
+  opacity: 0; /* full swap: no square visible */
   transform: translate3d(0, 10px, 0) scale(0.985);
 }
 
 @keyframes contactWaveA {
-  from { transform: translate3d(-22%, 0, 0); }
-  to   { transform: translate3d(30%, 0, 0); }
+  from { transform: translate3d(var(--waveA-x0), var(--waveA-y0), 0); }
+  to   { transform: translate3d(var(--waveA-x1), var(--waveA-y1), 0); }
 }
 
 @keyframes contactWaveB {
-  from { transform: translate3d(18%, -8%, 0); }
-  to   { transform: translate3d(-14%, 8%, 0); }
+  from { transform: translate3d(var(--waveB-x0), var(--waveB-y0), 0); }
+  to   { transform: translate3d(var(--waveB-x1), var(--waveB-y1), 0); }
 }
 
 @keyframes contactPulse {
@@ -231,7 +222,7 @@ p, li { @apply tracking-tight; }
   50%      { opacity: 0.86; }
 }
 
-/* blob layer (appears on hover) */
+/* blob */
 .contact-tile__blobCenter {
   position: absolute;
   inset: 0;
@@ -241,87 +232,95 @@ p, li { @apply tracking-tight; }
   z-index: 1;
 
   opacity: 0;
-  transform: translate3d(var(--mx), var(--my), 0) scale(0.78);
-  transition:
-    opacity 220ms ease,
-    transform 180ms cubic-bezier(0.2, 0.9, 0.2, 1.35);
+  transform: translate3d(var(--mx), var(--my), 0) scale(0.86);
+  transition: opacity 220ms ease, transform 160ms ease;
+  will-change: transform, opacity;
 
   filter: drop-shadow(0 34px 82px rgba(0, 0, 0, 0.72));
 }
 
-.contact-tile:hover .contact-tile__blobCenter {
-  opacity: 1;
-  transform: translate3d(var(--mx), var(--my), 0) scale(1.02);
+/* soft halo so the blob never feels like it’s “hitting” a black edge */
+.contact-tile__blobCenter::before {
+  content: "";
+  position: absolute;
+  inset: -18%;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 50% 50%, rgba(var(--blob-rgb) / 0.26), rgba(var(--blob-rgb) / 0.0) 68%);
+  filter: blur(46px);
+  opacity: 0.85;
+  transform: translate3d(0,0,0);
 }
 
-.contact-tile:active .contact-tile__blobCenter {
-  transform: translate3d(var(--mx), var(--my), 0) scale(0.985);
+.contact-tile:hover .contact-tile__blobCenter {
+  opacity: 1;
+  transform: translate3d(var(--mx), var(--my), 0) scale(1);
 }
 
 .contact-tile__blobTilt {
-  width: 92%;
-  height: 92%;
+  width: 86%;
+  height: 86%;
   display: block;
   transform: rotateX(var(--rx)) rotateY(var(--ry));
   transform-style: preserve-3d;
-  transition: transform 180ms cubic-bezier(0.2, 0.9, 0.2, 1.35);
+  transition: transform 140ms ease; /* no inertia-y drifting */
 }
 
-/* critical: span must be block or it can collapse */
+/* translucent gel */
 .contact-tile__blob {
   display: block;
-
   position: relative;
   width: 100%;
   height: 100%;
 
+  /* less uniform silhouette by default */
+  border-radius: 54% 46% 58% 42% / 46% 58% 42% 54%;
+
   background:
-    radial-gradient(
-      140% 140% at calc(30% + var(--hx)) calc(22% + var(--hy)),
-      rgba(255,255,255,0.62) 0%,
-      rgba(255,255,255,0.18) 28%,
-      rgba(255,255,255,0.0) 58%
-    ),
-    radial-gradient(
-      170% 170% at calc(72% - var(--hx)) calc(84% - var(--hy)),
-      rgba(0,0,0,0.46) 0%,
-      rgba(0,0,0,0.18) 30%,
-      rgba(0,0,0,0.0) 68%
-    ),
-    radial-gradient(
-      240% 150% at 50% 118%,
-      rgba(255,255,255,0.16) 0%,
-      rgba(255,255,255,0.0) 64%
-    ),
-    var(--blob);
+    radial-gradient(140% 140% at calc(32% + var(--hx)) calc(22% + var(--hy)),
+      rgba(255,255,255,0.55) 0%,
+      rgba(255,255,255,0.10) 32%,
+      rgba(255,255,255,0.0) 62%),
+    radial-gradient(170% 170% at calc(74% - var(--hx)) calc(84% - var(--hy)),
+      rgba(0,0,0,0.42) 0%,
+      rgba(0,0,0,0.14) 36%,
+      rgba(0,0,0,0.0) 70%),
+    rgba(var(--blob-rgb) / 0.72);
 
-  border-radius: 50%;
   box-shadow:
-    inset 0 0 0 1px rgba(255,255,255,0.18),
-    inset 0 -48px 140px rgba(0,0,0,0.34);
+    inset 0 0 0 1px rgba(255,255,255,0.14),
+    inset 0 -48px 140px rgba(0,0,0,0.24);
 
-  filter: saturate(1.08) contrast(1.06);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
 
+  filter: saturate(1.06) contrast(1.04);
+
+  /* key: paused by default, runs only while mouse is moving (data-jiggle) */
   animation:
-    contactBlobEdge 6.9s ease-in-out infinite,
-    contactBlobWobble 1.18s ease-in-out infinite;
+    contactBlobEdge 6.6s ease-in-out infinite,
+    contactBlobWobble 1.05s ease-in-out infinite;
+  animation-play-state: paused;
 
   will-change: border-radius, transform;
 }
 
+/* only animate while actively moving the mouse */
+.contact-tile[data-jiggle="1"] .contact-tile__blob {
+  animation-play-state: running;
+}
+
 .contact-tile__shine {
   position: absolute;
-  inset: -6px;
+  inset: -10px;
   border-radius: inherit;
-  background:
-    radial-gradient(
-      circle at calc(34% + var(--hx)) calc(26% + var(--hy)),
-      rgba(255,255,255,0.95) 0%,
-      rgba(255,255,255,0.20) 22%,
-      rgba(255,255,255,0.0) 62%
-    );
-  opacity: 0.55;
-  filter: blur(8px);
+  background: radial-gradient(
+    circle at calc(36% + var(--hx)) calc(28% + var(--hy)),
+    rgba(255,255,255,0.70) 0%,
+    rgba(255,255,255,0.18) 22%,
+    rgba(255,255,255,0.0) 62%
+  );
+  opacity: 0.42;
+  filter: blur(10px);
   mix-blend-mode: screen;
   pointer-events: none;
 }
@@ -331,51 +330,22 @@ p, li { @apply tracking-tight; }
   inset: 0;
   border-radius: inherit;
   box-shadow:
-    inset 0 0 0 1px rgba(255,255,255,0.18),
-    inset 0 22px 70px rgba(255,255,255,0.06);
-  opacity: 0.95;
+    inset 0 0 0 1px rgba(255,255,255,0.14),
+    inset 0 22px 70px rgba(255,255,255,0.05);
+  opacity: 0.9;
   pointer-events: none;
 }
 
-/* printed-on-blob label (not bold) */
+/* labels */
+.contact-tile__plateLabel,
 .contact-tile__blobLabel {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  pointer-events: none;
-
-  font-weight: 400; /* <- not bold */
-  letter-spacing: -0.03em;
+  font-weight: 400; /* not bold */
+  letter-spacing: -0.045em;
   font-size: clamp(44px, 7vw, 88px);
   line-height: 1;
-
-  opacity: 0;
-  transform: translate3d(calc(var(--mx) * 0.04), calc(var(--my) * 0.04), 0) translateZ(0.1px);
-  transition: opacity 160ms ease, transform 200ms ease;
-
-  background: radial-gradient(
-    140% 140% at calc(42% + var(--hx)) calc(34% + var(--hy)),
-    var(--inkHi) 0%,
-    var(--ink) 44%,
-    var(--inkLo) 100%
-  );
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-
-  filter:
-    drop-shadow(0 1px 0 rgba(255,255,255,0.10))
-    drop-shadow(0 -1px 0 rgba(0,0,0,0.26));
 }
 
-.contact-tile:hover .contact-tile__blobLabel {
-  opacity: 1;
-  transform: translate3d(calc(var(--mx) * 0.05), calc(var(--my) * 0.05), 0) translateZ(0.1px);
-  animation: contactInkJiggle 1.18s ease-in-out infinite;
-}
-
-/* plate label (not bold) */
+/* plate label (clean, fades out) */
 .contact-tile__plateLabel {
   position: relative;
   z-index: 2;
@@ -383,39 +353,57 @@ p, li { @apply tracking-tight; }
   height: 100%;
   display: grid;
   place-items: center;
-
-  font-weight: 400; /* <- not bold */
-  letter-spacing: -0.03em;
-  font-size: clamp(44px, 7vw, 88px);
-  line-height: 1;
-
-  color: rgba(255,255,255,0.92);
-  transition: opacity 160ms ease, transform 220ms ease;
+  color: rgba(255,255,255,0.88);
+  transition: opacity 160ms ease, transform 200ms ease;
 }
 
 .contact-tile:hover .contact-tile__plateLabel {
   opacity: 0;
-  transform: translate3d(0, 8px, 0) scale(0.99);
+  transform: translate3d(0, 6px, 0);
+}
+
+/* blob label: inside gel, subtly blended, moves with blob (no extra jiggle animation) */
+.contact-tile__blobLabel {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+
+  opacity: 0;
+  transform: translate3d(calc(var(--mx) * 0.02), calc(var(--my) * 0.02), 0);
+  transition: opacity 140ms ease;
+
+  /* modern: no heavy shadows */
+  text-rendering: geometricPrecision;
+}
+
+.contact-tile:hover .contact-tile__blobLabel {
+  opacity: 1;
+}
+
+/* per-tile ink look (less tacky than gradient-clip) */
+.contact-tile[data-seed="connect"] .contact-tile__blobLabel {
+  color: rgba(255,255,255,0.84);
+  mix-blend-mode: soft-light;
+}
+
+.contact-tile[data-seed="email"] .contact-tile__blobLabel {
+  color: rgba(16,16,20,0.70);
+  mix-blend-mode: multiply;
 }
 
 @keyframes contactBlobEdge {
   0%, 100% { border-radius: 54% 46% 58% 42% / 46% 58% 42% 54%; }
-  16%      { border-radius: 62% 38% 52% 48% / 52% 66% 34% 48%; }
-  38%      { border-radius: 43% 57% 44% 56% / 60% 42% 58% 40%; }
-  62%      { border-radius: 58% 42% 66% 34% / 38% 58% 42% 62%; }
-  84%      { border-radius: 48% 52% 41% 59% / 56% 45% 55% 44%; }
+  18%      { border-radius: 61% 39% 52% 48% / 50% 64% 36% 50%; }
+  44%      { border-radius: 44% 56% 46% 54% / 60% 42% 58% 40%; }
+  70%      { border-radius: 58% 42% 64% 36% / 40% 58% 42% 60%; }
 }
 
 @keyframes contactBlobWobble {
   0%, 100% { transform: rotate(0deg) scale(1); }
-  33%      { transform: rotate(1.1deg) scale(1.04, 0.985); }
-  66%      { transform: rotate(-1.0deg) scale(0.985, 1.05); }
-}
-
-@keyframes contactInkJiggle {
-  0%, 100% { transform: translate3d(calc(var(--mx) * 0.05), calc(var(--my) * 0.05), 0) scale(1); }
-  35%      { transform: translate3d(calc(var(--mx) * 0.06), calc(var(--my) * 0.04), 0) scale(1.015, 0.995); }
-  70%      { transform: translate3d(calc(var(--mx) * 0.04), calc(var(--my) * 0.06), 0) scale(0.995, 1.02); }
+  40%      { transform: rotate(0.55deg) scale(1.012, 0.995); }
+  80%      { transform: rotate(-0.45deg) scale(0.995, 1.015); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -427,8 +415,7 @@ p, li { @apply tracking-tight; }
     transition: none !important;
     animation: none !important;
   }
-  .contact-tile__blob,
-  .contact-tile__blobLabel {
+  .contact-tile__blob {
     animation: none !important;
   }
 }
