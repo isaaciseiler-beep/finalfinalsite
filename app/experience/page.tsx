@@ -164,7 +164,8 @@ export default function ExperiencePage() {
     <Container>
       {/* prevent any horizontal overflow / sideways page scroll */}
       <div className="-mx-4 sm:-mx-6 overflow-x-hidden">
-        <div className="px-4 sm:px-6 pt-[112px] md:pt-[112px]">
+        {/* let <Container> control the top padding so this page aligns with About */}
+        <div className="px-4 sm:px-6">
           {/* education */}
           <Parallax amount={-70}>
             <section className="pb-6 md:pb-8">
