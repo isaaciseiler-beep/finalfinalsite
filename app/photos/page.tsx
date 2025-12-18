@@ -1219,7 +1219,7 @@ function isWindowPhoto(photo: PhotoMeta) {
   return computeLayoutVariant(photo, getPhotoIndex0(photo.id)) === "window";
 }
 
-// ---------- WINDOW (fixed frame + scroll-past image + true bottom border) ----------
+// ---------- WINDOW (fixed frame + scroll-through photo) ----------
 
 function WindowFrame({
   photo,
@@ -1239,81 +1239,97 @@ function WindowFrame({
     setSrc(buildR2Src(photo.id, EXT_CANDIDATES[0]));
   }, [photo.id]);
 
+  // progress is mapped to the *sticky window duration*:
+  // 0 when the window pins, 1 right before it unpins.
   const { scrollYProgress } = useScroll({
     target: sectionRef,
-    offset: ["start end", "end start"],
+    offset: ["start start", "end end"],
   });
 
-  // "frame" is simulated with top/bottom bars.
-  // open: bars retract (22vh -> 0)
-  // hold: bars stay at 0
-  // close: bars return (0 -> 22vh) (true inverse of open)
-  // Using bars instead of clip-path keeps the frame fixed and makes the bottom border animation reliable.
-  const frameVh = useTransform(scrollYProgress, [0, 0.18, 0.82, 1], [22, 0, 0, 22]);
-  const topBarH = useMotionTemplate`${frameVh}vh`;
-  const bottomBarH = useMotionTemplate`${frameVh}vh`;
+  // frame bars (vh so they scale with viewport height)
+  const FRAME_VH = 22;
 
-  // Strong "scroll past" feel: image moves behind the fixed frame across the full section.
-  const imageY = useTransform(scrollYProgress, [0, 1], ["35%", "-35%"]);
+  // open fast, hold, then close fast (no "dead" black gap at the end)
+  const topFrameVh = useTransform(
+    scrollYProgress,
+    [0, 0.18, 0.82, 1],
+    [FRAME_VH, 0, 0, FRAME_VH],
+  );
+  const bottomFrameVh = useTransform(
+    scrollYProgress,
+    [0, 0.18, 0.82, 1],
+    [FRAME_VH, 0, 0, FRAME_VH],
+  );
 
-  // location pill is anchored to the bottom edge of the moving frame (i.e., above the bottom bar)
+  const topFrameH = useMotionTemplate`${topFrameVh}vh`;
+  const bottomFrameH = useMotionTemplate`${bottomFrameVh}vh`;
+
+  // strong parallax that starts immediately when the window enters
+  const imageY = useTransform(scrollYProgress, [0, 1], ["-22%", "22%"]);
+
+  // pill follows the *moving bottom frame edge* (not the photo)
+  const pillBottom = useMotionTemplate`calc(${bottomFrameVh}vh + 16px)`;
   const pillOpacity = useTransform(
     scrollYProgress,
-    [0, 0.14, 0.22, 0.78, 0.86, 1],
+    [0, 0.12, 0.20, 0.80, 0.88, 1],
     [0, 0, 1, 1, 0, 0],
   );
-  const pillBottom = useMotionTemplate`calc(${frameVh}vh + 16px)`;
+  const pillY = useTransform(scrollYProgress, [0.12, 0.20, 0.80, 0.88], [10, 0, 0, 10]);
 
   const isPriority = index0 < 14 || windowIndices.has(index0);
   const showLocation = !isHoldText(photo.locationLabel);
 
   return (
     <div id={`photo-${photo.id}`}>
-      <div ref={sectionRef} className="relative h-[240vh] md:h-[260vh]">
+      {/* tall section so you scroll "past" the photo while the frame stays fixed */}
+      <div ref={sectionRef} className="relative h-[180vh] md:h-[200vh]">
         <div className="sticky top-0 h-dvh bg-black overflow-hidden">
-          {/* image (moves behind frame) */}
-          <motion.div
-            style={{ y: imageY, scale: 1.22 }}
-            className="absolute inset-0 will-change-transform"
-          >
-            <Image
-              src={src}
-              alt={photo.alt}
-              priority={isPriority}
-              placeholder="blur"
-              blurDataURL={BLUR_DATA_URL}
-              fill
-              sizes={FLEX_SIZES}
-              quality={75}
-              className="object-cover"
-              onError={() => {
-                const nextIdx = extIdxRef.current + 1;
-                if (nextIdx < EXT_CANDIDATES.length) {
-                  extIdxRef.current = nextIdx;
-                  setSrc(buildR2Src(photo.id, EXT_CANDIDATES[nextIdx]));
-                  return;
-                }
-                onImageError(photo.id);
-              }}
-            />
+          {/* photo behind the frame */}
+          <motion.div className="absolute inset-0">
+            <motion.div
+              style={{ y: imageY, scale: 1.12 }}
+              className="absolute inset-0 will-change-transform"
+            >
+              <Image
+                src={src}
+                alt={photo.alt}
+                priority={isPriority}
+                placeholder="blur"
+                blurDataURL={BLUR_DATA_URL}
+                fill
+                sizes={FLEX_SIZES}
+                quality={76}
+                className="object-cover"
+                onError={() => {
+                  const nextIdx = extIdxRef.current + 1;
+                  if (nextIdx < EXT_CANDIDATES.length) {
+                    extIdxRef.current = nextIdx;
+                    setSrc(buildR2Src(photo.id, EXT_CANDIDATES[nextIdx]));
+                    return;
+                  }
+                  onImageError(photo.id);
+                }}
+              />
+            </motion.div>
           </motion.div>
 
-          {/* frame bars (true top/bottom border animation) */}
+          {/* fixed frame bars */}
           <motion.div
             aria-hidden="true"
-            style={{ height: topBarH }}
-            className="pointer-events-none absolute inset-x-0 top-0 bg-black"
+            style={{ height: topFrameH }}
+            className="pointer-events-none absolute inset-x-0 top-0 z-[5] bg-black"
           />
           <motion.div
             aria-hidden="true"
-            style={{ height: bottomBarH }}
-            className="pointer-events-none absolute inset-x-0 bottom-0 bg-black"
+            style={{ height: bottomFrameH }}
+            className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] bg-black"
           />
 
+          {/* location pill anchored to the moving bottom edge */}
           {showLocation && (
             <motion.div
-              style={{ opacity: pillOpacity, bottom: pillBottom }}
-              className="pointer-events-none absolute right-4 sm:right-6"
+              style={{ opacity: pillOpacity, y: pillY, bottom: pillBottom }}
+              className="pointer-events-none absolute right-4 sm:right-6 z-[6]"
             >
               <div className="rounded-full bg-black/70 px-4 py-1.5 text-sm font-medium text-white/90 shadow-sm backdrop-blur-md">
                 <span className="line-clamp-1">{photo.locationLabel}</span>
@@ -1325,7 +1341,6 @@ function WindowFrame({
     </div>
   );
 }
-
 // ---------- GENERIC CARD (used by non-window layouts) ----------
 
 function PhotoCard({
@@ -1722,119 +1737,128 @@ function FiltersPanel({ state, onChange, onReset }: FiltersPanelProps) {
     return n;
   };
 
-  const chip =
-    "rounded-full px-4 py-1.5 text-[0.95rem] transition focus-visible:outline-none";
+  // match the experience page feel: subtle hover + press scale, no heavy shadows
+  const chipBase =
+    "rounded-full px-4 py-1.5 text-[0.95rem] font-medium " +
+    "transition-[transform,background-color,color] duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] " +
+    "focus-visible:outline-none active:scale-[0.97]";
 
   return (
-    <div className="flex h-full w-full flex-col gap-4 overflow-y-auto p-5">
-      <div className="space-y-2">
-        <p className="text-xs uppercase tracking-[0.18em] text-neutral-300/90">
-          Location
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {(Object.keys(regionLabels) as Region[]).map((r) => {
-            const active = state.regions.has(r);
-            return (
-              <button
-                key={r}
-                type="button"
-                onClick={() =>
-                  onChange({
-                    ...state,
-                    regions: toggle(state.regions, r),
-                  })
-                }
-                className={
-                  chip +
-                  " " +
-                  (active
-                    ? "bg-black text-white font-semibold"
-                    : "bg-black/70 text-white/80 hover:bg-black")
-                }
-              >
-                {regionLabels[r]}
-              </button>
-            );
-          })}
+    <div className="flex h-full w-full flex-col p-5">
+      <div className="flex-1 space-y-4 overflow-y-auto pr-1">
+        <div className="space-y-2">
+          <p className="text-xs uppercase tracking-[0.18em] text-neutral-300/90">
+            Location
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {(Object.keys(regionLabels) as Region[]).map((r) => {
+              const active = state.regions.has(r);
+              return (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() =>
+                    onChange({
+                      ...state,
+                      regions: toggle(state.regions, r),
+                    })
+                  }
+                  className={
+                    chipBase +
+                    " " +
+                    (active
+                      ? "bg-black text-white font-semibold"
+                      : "bg-black/70 text-white/80 hover:bg-black hover:text-white")
+                  }
+                >
+                  {regionLabels[r]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-xs uppercase tracking-[0.18em] text-neutral-300/90">
+            Setting
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {(Object.keys(settingLabels) as Setting[]).map((s) => {
+              const active = state.settings.has(s);
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() =>
+                    onChange({
+                      ...state,
+                      settings: toggle(state.settings, s),
+                    })
+                  }
+                  className={
+                    chipBase +
+                    " " +
+                    (active
+                      ? "bg-black text-white font-semibold"
+                      : "bg-black/70 text-white/80 hover:bg-black hover:text-white")
+                  }
+                >
+                  {settingLabels[s]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-xs uppercase tracking-[0.18em] text-neutral-300/90">
+            Subject
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {(Object.keys(subjectLabels) as Subject[]).map((s) => {
+              const active = state.subjects.has(s);
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() =>
+                    onChange({
+                      ...state,
+                      subjects: toggle(state.subjects, s),
+                    })
+                  }
+                  className={
+                    chipBase +
+                    " " +
+                    (active
+                      ? "bg-black text-white font-semibold"
+                      : "bg-black/70 text-white/80 hover:bg-black hover:text-white")
+                  }
+                >
+                  {subjectLabels[s]}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      <div className="space-y-2">
-        <p className="text-xs uppercase tracking-[0.18em] text-neutral-300/90">
-          Setting
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {(Object.keys(settingLabels) as Setting[]).map((s) => {
-            const active = state.settings.has(s);
-            return (
-              <button
-                key={s}
-                type="button"
-                onClick={() =>
-                  onChange({
-                    ...state,
-                    settings: toggle(state.settings, s),
-                  })
-                }
-                className={
-                  chip +
-                  " " +
-                  (active
-                    ? "bg-black text-white font-semibold"
-                    : "bg-black/70 text-white/80 hover:bg-black")
-                }
-              >
-                {settingLabels[s]}
-              </button>
-            );
-          })}
+      {/* bottom-left reset */}
+      <div className="pt-4">
+        <div className="flex justify-start">
+          <button
+            type="button"
+            onClick={onReset}
+            className="rounded-full bg-black px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-white transition-colors duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] hover:bg-black/80 focus-visible:outline-none active:scale-[0.98]"
+          >
+            Reset
+          </button>
         </div>
-      </div>
-
-      <div className="space-y-2">
-        <p className="text-xs uppercase tracking-[0.18em] text-neutral-300/90">
-          Subject
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {(Object.keys(subjectLabels) as Subject[]).map((s) => {
-            const active = state.subjects.has(s);
-            return (
-              <button
-                key={s}
-                type="button"
-                onClick={() =>
-                  onChange({
-                    ...state,
-                    subjects: toggle(state.subjects, s),
-                  })
-                }
-                className={
-                  chip +
-                  " " +
-                  (active
-                    ? "bg-black text-white font-semibold"
-                    : "bg-black/70 text-white/80 hover:bg-black")
-                }
-              >
-                {subjectLabels[s]}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="mt-1 flex justify-end pb-1">
-        <button
-          type="button"
-          onClick={onReset}
-          className="rounded-full bg-black px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-white hover:bg-black/80 focus-visible:outline-none"
-        >
-          Reset
-        </button>
       </div>
     </div>
   );
 }
+
 
 // ---------- LIQUID-GLASS PILL (fixed dock + anchored popup + footer-avoid) ----------
 
@@ -2047,13 +2071,19 @@ function FloatingControls({
                 y: 0,
                 scale: 1,
                 visibility: "visible",
-                transition: { duration: 0.22, ease: [0.22, 0.61, 0.36, 1] },
+                transition: {
+                  duration: 0.32,
+                  ease: [0.4, 0.0, 0.2, 1],
+                },
               },
               closed: {
                 opacity: 0,
-                y: 10,
-                scale: 0.985,
-                transition: { duration: 0.18, ease: [0.22, 0.61, 0.36, 1] },
+                y: 14,
+                scale: 0.97,
+                transition: {
+                  duration: 0.24,
+                  ease: [0.4, 0.0, 0.2, 1],
+                },
                 transitionEnd: { visibility: "hidden" },
               },
             }}
@@ -2070,7 +2100,7 @@ function FloatingControls({
                   opacity: open && mode === "map" ? 1 : 0,
                   scale: open && mode === "map" ? 1 : 0.985,
                 }}
-                transition={{ duration: 0.22, ease: [0.22, 0.61, 0.36, 1] }}
+                transition={{ duration: 0.28, ease: [0.4, 0.0, 0.2, 1] }}
                 className="absolute inset-0"
                 style={{
                   pointerEvents: open && mode === "map" ? "auto" : "none",
@@ -2089,7 +2119,7 @@ function FloatingControls({
                   opacity: open && mode === "filters" ? 1 : 0,
                   scale: open && mode === "filters" ? 1 : 0.985,
                 }}
-                transition={{ duration: 0.22, ease: [0.22, 0.61, 0.36, 1] }}
+                transition={{ duration: 0.28, ease: [0.4, 0.0, 0.2, 1] }}
                 className="absolute inset-0"
                 style={{
                   pointerEvents: open && mode === "filters" ? "auto" : "none",
@@ -2348,8 +2378,9 @@ export default function PhotosPage() {
       const p0 = list[i];
       const index0 = getPhotoIndex0(p0.id);
 
-      // page should always start with a single full-width, non-window photo
-      if (out.length === 0 && !isWindowPhoto(p0) && !offsetIds.has(p0.id)) {
+      // page should always start with a single full-width photo (never a window / offset block)
+      if (out.length === 0) {
+        offsetIds.delete(p0.id);
         out.push({ kind: "full", photo: p0, index0 });
         i += 1;
         lastWasRow2 = false;
@@ -2428,7 +2459,7 @@ export default function PhotosPage() {
           >
             <div className="relative overflow-visible">
               {sections.map((s, idx) => {
-                const gap = idx === 0 ? "" : "mt-12 md:mt-20"; // doubled spacing between sections
+                const gap = idx === 0 ? "" : "mt-4 md:mt-6"; // tighter + consistent spacing between sections
                 if (s.kind === "window") {
                   return (
                     <div
@@ -2451,7 +2482,7 @@ export default function PhotosPage() {
 
                   return (
                     <div key={`L-${a.id}-${b.id}-${c.id}`} className={gap}>
-                      <div className="grid grid-cols-12 gap-6 md:gap-10 md:grid-rows-2">
+                      <div className="grid grid-cols-12 gap-2 md:gap-3 md:grid-rows-2">
                         {/* 3-photo L / backward-L using ONLY half-width tiles (never smaller than row2) */}
                         <PhotoCard
                           photo={a}
@@ -2495,7 +2526,7 @@ export default function PhotosPage() {
                   const [ia, ib] = s.index0s;
                   return (
                     <div key={`row2-${a.id}-${b.id}`} className={gap}>
-                      <div className="grid grid-cols-12 gap-6 md:gap-10">
+                      <div className="grid grid-cols-12 gap-2 md:gap-3">
                         <PhotoCard
                           photo={a}
                           index0={ia}
@@ -2518,7 +2549,7 @@ export default function PhotosPage() {
                 if (s.kind === "offset") {
                   return (
                     <div key={`offset-${s.photo.id}`} className={gap}>
-                      <div className="grid grid-cols-12 gap-6 md:gap-10">
+                      <div className="grid grid-cols-12 gap-2 md:gap-3">
                         <PhotoCard
                           photo={s.photo}
                           index0={s.index0}
@@ -2537,7 +2568,7 @@ export default function PhotosPage() {
                 // full
                 return (
                   <div key={`full-${s.photo.id}`} className={gap}>
-                    <div className="grid grid-cols-12 gap-6 md:gap-10">
+                    <div className="grid grid-cols-12 gap-2 md:gap-3">
                       <PhotoCard
                         photo={s.photo}
                         index0={s.index0}
@@ -2550,8 +2581,8 @@ export default function PhotosPage() {
                 );
               })}
 
-              {/* tail spacer: ensures the final window section can complete its bottom scroll-away */}
-              <div aria-hidden className="h-[22vh]" />
+              {/* tail spacer (small): keeps footer breathing room without creating a visible gap) */}
+              <div aria-hidden className="h-6 md:h-8" />
             </div>
           </div>
         </div>
